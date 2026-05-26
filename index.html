@@ -1,44 +1,125 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>NEBULA — Hand Tracking</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HBD Meysaa 🌌</title>
   <link rel="stylesheet" href="style.css" />
-
-  <!-- MediaPipe Hand Tracking -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 
   <!-- Three.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
-  <!-- Hidden webcam feed (input ke MediaPipe) -->
-  <video id="video" autoplay playsinline muted></video>
+  <!-- ====== THREE.JS CANVAS ====== -->
+  <canvas id="bg-canvas"></canvas>
 
-  <!-- Canvas untuk hand landmark overlay -->
-  <canvas id="handCanvas"></canvas>
+  <!-- ====== WEBCAM (hidden) ====== -->
+  <video id="webcam-video" playsinline muted></video>
 
-  <!-- Three.js canvas nebula background -->
-  <canvas id="nebulaCanvas"></canvas>
-
-  <!-- UI -->
-  <div id="ui">
-    <div id="title">✦ NEBULA</div>
-    <div id="status">Menginisialisasi kamera...</div>
-    <div id="hint">Gerakkan tangan untuk mengendalikan galaksi</div>
+  <!-- ====== HAND CURSOR ====== -->
+  <div id="hand-cursor">
+    <div class="cursor-ring"></div>
+    <div class="cursor-dot"></div>
   </div>
+  <div id="pinch-ripple"></div>
 
-  <!-- Finger tip glow indicators -->
-  <div id="cursors">
-    <div class="fingertip" id="tip0"></div>
-    <div class="fingertip" id="tip1"></div>
-    <div class="fingertip" id="tip2"></div>
-    <div class="fingertip" id="tip3"></div>
-    <div class="fingertip" id="tip4"></div>
+  <!-- ====== SCENE WRAPPER ====== -->
+  <div id="scene-wrapper">
+
+    <!-- SCENE 1: OPENING -->
+    <section id="scene-opening" class="scene active">
+      <div class="opening-content">
+        <div class="star-decoration top-left">✦</div>
+        <div class="star-decoration top-right">✦</div>
+        <p class="opening-subtitle">A MESSAGE FROM THE UNIVERSE</p>
+        <h1 id="hbd-title">
+          <span class="line1">HAPPY BIRTHDAY</span>
+          <span class="line2 glow-name">MEYSAA</span>
+          <span class="line3">Meisya Qeena Rusmiyanto</span>
+        </h1>
+        <div class="particle-ring" id="title-ring"></div>
+        <p class="opening-hint gesture-hint">
+          <span class="hand-icon">✋</span> Allow camera &amp; raise your hand to begin
+        </p>
+        <div id="cam-status" class="cam-status">Initializing camera…</div>
+        <button id="btn-start" class="holo-btn start-btn" onclick="window.startJourney && window.startJourney()">
+          <span>BEGIN JOURNEY</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- SCENE 2: QUESTIONS -->
+    <section id="scene-questions" class="scene">
+      <div id="question-container">
+        <div class="question-number" id="q-number">01 / 05</div>
+        <div class="question-box" id="question-box">
+          <p id="question-text">Loading…</p>
+        </div>
+        <div id="answers-container"></div>
+        <p class="gesture-hint small">Pinch (👌) to select an answer</p>
+      </div>
+    </section>
+
+    <!-- SCENE 3: PHOTO PUZZLE -->
+    <section id="scene-puzzle" class="scene">
+      <div id="puzzle-ui">
+        <div id="puzzle-intro" class="puzzle-phase">
+          <h2 class="holo-title">FINAL MISSION</h2>
+          <p>Capture your moment &amp; solve the star puzzle!</p>
+          <div id="capture-viewport">
+            <video id="capture-video" autoplay playsinline muted></video>
+            <div id="capture-frame">
+              <div class="frame-corner tl"></div>
+              <div class="frame-corner tr"></div>
+              <div class="frame-corner bl"></div>
+              <div class="frame-corner br"></div>
+              <p class="frame-label">ALIGN & PINCH BOTH HANDS TO CAPTURE</p>
+            </div>
+          </div>
+          <canvas id="capture-canvas" style="display:none"></canvas>
+          <p class="gesture-hint small">👌 Both hands pinch = CAPTURE</p>
+        </div>
+
+        <div id="puzzle-game" class="puzzle-phase" style="display:none">
+          <div id="puzzle-header">
+            <span class="holo-title small">SOLVE THE PUZZLE</span>
+            <div id="timer-display">⏱ <span id="timer-val">60</span>s</div>
+          </div>
+          <div id="puzzle-board"></div>
+          <p class="gesture-hint small">👌 Pinch tile to grab · Pinch again to drop</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCENE 4: VICTORY -->
+    <section id="scene-victory" class="scene">
+      <div class="victory-content">
+        <div class="confetti-container" id="confetti-container"></div>
+        <h1 class="victory-title">🎉 SELAMAT ULANG TAHUN! 🎉</h1>
+        <p class="victory-name">Meisya Qeena Rusmiyanto</p>
+        <p class="victory-msg">Semoga hari-harimu seindah bintang-bintang di galaksi ini.
+          Teruslah bersinar, teruslah bermimpi. The universe loves you! 🌌💖</p>
+        <div class="victory-stars">
+          <span>✦</span><span>★</span><span>✦</span><span>★</span><span>✦</span>
+        </div>
+        <button class="holo-btn" onclick="location.reload()">REPLAY ↺</button>
+      </div>
+    </section>
+
+  </div><!-- /scene-wrapper -->
+
+  <!-- TRANSITION OVERLAY -->
+  <div id="warp-overlay"></div>
+
+  <!-- GESTURE STATUS HUD -->
+  <div id="gesture-hud">
+    <span id="gesture-label">—</span>
   </div>
 
   <script src="script.js"></script>
