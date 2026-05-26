@@ -1,0 +1,131 @@
+/* ===== RESET & BASE ===== */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --neon-cyan: #00f5ff;
+  --neon-purple: #bf00ff;
+  --neon-pink: #ff006e;
+  --neon-gold: #ffd700;
+  --neon-green: #39ff14;
+  --bg-dark: #00000f;
+}
+
+body {
+  background: var(--bg-dark);
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  font-family: 'Courier New', monospace;
+  cursor: none;
+}
+
+/* ===== WEBCAM (hidden, cuma buat MediaPipe) ===== */
+#video {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+}
+
+/* ===== THREE.JS CANVAS (background nebula) ===== */
+#nebulaCanvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1;
+}
+
+/* ===== HAND LANDMARK OVERLAY ===== */
+#handCanvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* ===== UI ===== */
+#ui {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  z-index: 10;
+  padding: 24px 32px;
+  pointer-events: none;
+}
+
+#title {
+  font-size: 11px;
+  letter-spacing: 0.5em;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 10px var(--neon-cyan);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+#status {
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+}
+
+#hint {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  color: rgba(255,255,255,0.25);
+  text-transform: uppercase;
+  z-index: 10;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ===== FINGERTIP GLOWS ===== */
+.fingertip {
+  position: fixed;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+#tip0 { background: radial-gradient(circle, #ffffff, transparent); box-shadow: 0 0 20px 6px var(--neon-purple); }
+#tip1 { background: radial-gradient(circle, #ffffff, transparent); box-shadow: 0 0 20px 6px var(--neon-cyan); }
+#tip2 { background: radial-gradient(circle, #ffffff, transparent); box-shadow: 0 0 20px 6px var(--neon-pink); }
+#tip3 { background: radial-gradient(circle, #ffffff, transparent); box-shadow: 0 0 20px 6px var(--neon-gold); }
+#tip4 { background: radial-gradient(circle, #ffffff, transparent); box-shadow: 0 0 20px 6px var(--neon-green); }
+
+/* ===== PULSE animation untuk tip ===== */
+@keyframes pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.4); }
+}
+
+.fingertip.active {
+  animation: pulse 0.8s ease-in-out infinite;
+}
+
+/* ===== STATUS colors ===== */
+.status-ok { color: var(--neon-cyan) !important; text-shadow: 0 0 8px var(--neon-cyan); }
+.status-hand { color: var(--neon-green) !important; text-shadow: 0 0 8px var(--neon-green); }

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NEBULA — Hand Tracking</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- MediaPipe Hand Tracking -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <!-- Hidden webcam feed (input ke MediaPipe) -->
+  <video id="video" autoplay playsinline muted></video>
+
+  <!-- Canvas untuk hand landmark overlay -->
+  <canvas id="handCanvas"></canvas>
+
+  <!-- Three.js canvas nebula background -->
+  <canvas id="nebulaCanvas"></canvas>
+
+  <!-- UI -->
+  <div id="ui">
+    <div id="title">✦ NEBULA</div>
+    <div id="status">Menginisialisasi kamera...</div>
+    <div id="hint">Gerakkan tangan untuk mengendalikan galaksi</div>
+  </div>
+
+  <!-- Finger tip glow indicators -->
+  <div id="cursors">
+    <div class="fingertip" id="tip0"></div>
+    <div class="fingertip" id="tip1"></div>
+    <div class="fingertip" id="tip2"></div>
+    <div class="fingertip" id="tip3"></div>
+    <div class="fingertip" id="tip4"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
