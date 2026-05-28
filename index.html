@@ -5,73 +5,78 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>HBD Meysaa 🌌</title>
   <link rel="stylesheet" href="style.css" />
-
-  <!-- Three.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
-  <!-- MediaPipe Hands -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
-  <!-- ====== THREE.JS CANVAS ====== -->
   <canvas id="bg-canvas"></canvas>
-
-  <!-- ====== WEBCAM (hidden) ====== -->
   <video id="webcam-video" playsinline muted></video>
 
-  <!-- ====== HAND CURSOR ====== -->
   <div id="hand-cursor">
     <div class="cursor-ring"></div>
     <div class="cursor-dot"></div>
   </div>
   <div id="pinch-ripple"></div>
 
-  <!-- ====== SCENE WRAPPER ====== -->
   <div id="scene-wrapper">
 
-    <!-- SCENE 1: OPENING -->
+    <!-- ══ SCENE 1: OPENING ══ -->
     <section id="scene-opening" class="scene active">
       <div class="opening-content">
-        <div class="star-decoration top-left">✦</div>
-        <div class="star-decoration top-right">✦</div>
+        <div class="star-decoration tl">✦</div>
+        <div class="star-decoration tr">✦</div>
         <p class="opening-subtitle">A MESSAGE FROM THE UNIVERSE</p>
         <h1 id="hbd-title">
           <span class="line1">HAPPY BIRTHDAY</span>
           <span class="line2 glow-name">MEYSAA</span>
           <span class="line3">Meisya Qeena Rusmiyanto</span>
         </h1>
-        <div class="particle-ring" id="title-ring"></div>
-        <p class="opening-hint gesture-hint">
-          <span class="hand-icon">✋</span> Allow camera &amp; raise your hand to begin
+        <p class="barakallah-text">Barakallah Fi Umrik</p>
+        <p class="opening-hint">
+          <span class="hand-icon">✋</span> Allow camera &amp; angkat tangan untuk mulai
         </p>
         <div id="cam-status" class="cam-status">Initializing camera…</div>
-        <button id="btn-start" class="holo-btn start-btn" onclick="window.startJourney && window.startJourney()">
+        <button id="btn-start" class="holo-btn" onclick="window.startJourney && window.startJourney()">
           <span>BEGIN JOURNEY</span>
         </button>
       </div>
     </section>
 
-    <!-- SCENE 2: QUESTIONS -->
+    <!-- ══ SCENE 2: QUESTIONS ══ -->
     <section id="scene-questions" class="scene">
       <div id="question-container">
-        <div class="question-number" id="q-number">01 / 05</div>
+        <div class="question-number" id="q-number">01 / 04</div>
         <div class="question-box" id="question-box">
           <p id="question-text">Loading…</p>
         </div>
         <div id="answers-container"></div>
-        <p class="gesture-hint small">Pinch (👌) to select an answer</p>
+        <p class="gesture-hint small">👌 Pinch atau klik untuk memilih</p>
       </div>
     </section>
 
-    <!-- SCENE 3: PHOTO PUZZLE -->
+    <!-- ══ SCENE 2.5: FEEDBACK COMBO ══ -->
+    <section id="scene-feedback" class="scene">
+      <div id="feedback-ui">
+        <p class="feedback-label">berdasarkan jawabanmu tadi...</p>
+        <div id="feedback-box">
+          <p id="feedback-text"></p>
+        </div>
+        <button class="holo-btn feedback-continue-btn" id="btn-feedback-continue">
+          <span>lanjut →</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ══ SCENE 3: PUZZLE ══ -->
     <section id="scene-puzzle" class="scene">
       <div id="puzzle-ui">
+
         <div id="puzzle-intro" class="puzzle-phase">
-          <h2 class="holo-title">FINAL MISSION</h2>
-          <p>Capture your moment &amp; solve the star puzzle!</p>
+          <h2 class="holo-title">MINI GAME</h2>
+          <p class="puzzle-teaser">Main game bentar yuk...</p>
           <div id="capture-viewport">
             <video id="capture-video" autoplay playsinline muted></video>
             <div id="capture-frame">
@@ -79,32 +84,55 @@
               <div class="frame-corner tr"></div>
               <div class="frame-corner bl"></div>
               <div class="frame-corner br"></div>
-              <p class="frame-label">ALIGN & PINCH BOTH HANDS TO CAPTURE</p>
+              <p class="frame-label">PINCH OR CLICK TO CAPTURE</p>
             </div>
           </div>
           <canvas id="capture-canvas" style="display:none"></canvas>
-          <p class="gesture-hint small">👌 Both hands pinch = CAPTURE</p>
+          <button class="holo-btn capture-btn" id="btn-capture">
+            <span>📸 CAPTURE</span>
+          </button>
+          <p class="gesture-hint small">atau 👌 pinch di mana saja</p>
         </div>
 
         <div id="puzzle-game" class="puzzle-phase" style="display:none">
-          <div id="puzzle-header">
-            <span class="holo-title small">SOLVE THE PUZZLE</span>
-            <div id="timer-display">⏱ <span id="timer-val">60</span>s</div>
-          </div>
+          <p class="holo-title small">SUSUN PUZZLE-NYA ✨</p>
           <div id="puzzle-board"></div>
-          <p class="gesture-hint small">👌 Pinch tile to grab · Pinch again to drop</p>
+          <p class="gesture-hint small">👌 Pinch / klik tile → grab · Pinch / klik lagi → drop</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══ SCENE 4: FINAL STORY (credits roll) ══ -->
+    <section id="scene-story" class="scene">
+      <div id="story-ui">
+        <div id="puzzle-result-msg" class="story-result-msg"></div>
+        <div id="story-popup" class="story-popup" style="display:none">
+          <p>Bentar sekali lagiii...</p>
+          <p class="popup-sub">last rill, ga boong 🙏</p>
+        </div>
+        <!-- credits viewport clips the scrolling track -->
+        <div id="story-credits" style="display:none">
+          <div id="credits-viewport">
+            <div id="credits-track">
+              <!-- .credit-line elements appended here dynamically -->
+            </div>
+          </div>
+          <button id="story-next-btn" class="story-next-btn" style="display:none">
+            <span class="next-arrow">↓</span>
+          </button>
         </div>
       </div>
     </section>
 
-    <!-- SCENE 4: VICTORY -->
+    <!-- ══ SCENE 5: VICTORY ══ -->
     <section id="scene-victory" class="scene">
       <div class="victory-content">
         <div class="confetti-container" id="confetti-container"></div>
-        <h1 class="victory-title">🎉 SELAMAT ULANG TAHUN! 🎉</h1>
+        <p class="victory-sub">sekali lagi</p>
+        <h1 class="victory-title">HBD YAA!! 🎉</h1>
         <p class="victory-name">Meisya Qeena Rusmiyanto</p>
-        <p class="victory-msg">Semoga hari-harimu seindah bintang-bintang di galaksi ini.
-          Teruslah bersinar, teruslah bermimpi. The universe loves you! 🌌💖</p>
+        <p class="victory-msg">Jaga diri baik-baik, semoga semua yang kamu usahakan terwujud ✨</p>
         <div class="victory-stars">
           <span>✦</span><span>★</span><span>✦</span><span>★</span><span>✦</span>
         </div>
@@ -112,15 +140,10 @@
       </div>
     </section>
 
-  </div><!-- /scene-wrapper -->
-
-  <!-- TRANSITION OVERLAY -->
-  <div id="warp-overlay"></div>
-
-  <!-- GESTURE STATUS HUD -->
-  <div id="gesture-hud">
-    <span id="gesture-label">—</span>
   </div>
+
+  <div id="warp-overlay"></div>
+  <div id="gesture-hud"><span id="gesture-label">—</span></div>
 
   <script src="script.js"></script>
 </body>
