@@ -1,841 +1,1238 @@
-/* =============================================
-   SPACE NEBULA BIRTHDAY — script.js (final rev)
-   §1  PARTICLE SYSTEM
-   §2  HAND TRACKING
-   §3  UI SYSTEM
-   §4  QUESTION FLOW + FEEDBACK COMBO
-   §5  CAMERA SYSTEM
-   §6  PUZZLE GAME (6 tiles, seamless, drag)
-   §7  FINAL STORY (cinematic credits roll)
-   §8  SCENE MANAGER
-   §9  AUDIO SYSTEM
-   §10 APP INIT
-   ============================================= */
-"use strict";
+// ─── NEBULA CANVAS ───────────────────────────────
+let isFreePlay = false;
+const canvas = document.getElementById('nebulaCanvas');
+const ctx = canvas.getContext('2d');
+let width, height;
+let particles = [];
 
-/* ──────────────────────────────────────────────
-   §1  PARTICLE SYSTEM — Three.js nebula
-   ────────────────────────────────────────────── */
-const ParticleSystem = (() => {
-  let renderer, scene, camera;
-  let starField, nebula1, nebula2;
-  let clock = 0, warpActive = false, warpSpeed = 0;
+// ─── EXTRA PARTICLES (name / shaka mode) ─────────
+// Array terpisah — tidak ikut campur logika partikel utama.
+// Di-create/destroy hanya saat mode berganti.
+let extraParticles = [];
 
-  function init() {
-    const canvas = document.getElementById("bg-canvas");
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x03010a, 1);
-    scene  = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-    camera.position.z = 600;
-    _buildStars(); _buildNebula(); _listen(); _loop();
-  }
+// ─── ALL STATE VARS UP TOP ──────────────────────
+let currentEffect = 'none';
+let isPinching    = false;
+let lastGesture   = null;
+let gestureDebounceTimer = null;
+let cursorX = 0, cursorY = 0;
+let targetX = 0, targetY = 0;
+let draggedPiece  = null;
+let isGameActive  = false;
+let startTime;
 
-  function _buildStars() {
-    const N = 2200;
-    const geo = new THREE.BufferGeometry();
-    const pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
-    for (let i = 0; i < N; i++) {
-      pos[i*3]   = (Math.random()-.5)*2000;
-      pos[i*3+1] = (Math.random()-.5)*2000;
-      pos[i*3+2] = (Math.random()-.5)*2000;
-      const t = Math.random();
-      col[i*3]   = t<.85?1:(t<.93?1:.5);
-      col[i*3+1] = t<.85?1:(t<.93?.6:.5);
-      col[i*3+2] = 1;
+// ─── NAME TEXT ────────────────────────────────────
+const NAME_TEXT = "M.Q.S.R";
+
+// ─── TRAIL LAYER ─────────────────────────────────
+const trailCanvas = document.createElement('canvas');
+trailCanvas.style.cssText = `
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:2;`;
+document.body.appendChild(trailCanvas);
+const tctx = trailCanvas.getContext('2d');
+
+function resize() {
+    width  = canvas.width  = trailCanvas.width  = window.innerWidth;
+    height = canvas.height = trailCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── SHAKA IMAGE STATE ───────────────────────────
+let shakaReady = false;
+let shakaImg   = null;
+
+// ═══════════════════════════════════════════════════
+//  MAIN PARTICLE CLASS
+// ═══════════════════════════════════════════════════
+class Particle {
+    constructor(index, total) {
+        const phi = (1 + Math.sqrt(5)) / 2;
+        this.x  = ((index * phi * width)  % width  + width)  % width;
+        this.y  = ((index * phi * height) % height + height) % height;
+        this.vx = (Math.random() - 0.5) * 0.3;
+        this.vy = (Math.random() - 0.5) * 0.3;
+
+        this.hue        = 290 + Math.random() * 70;
+        this.size       = Math.random() * 1.6 + 0.5;
+        this.alpha      = Math.random() * 0.35 + 0.12;
+        this.twinkle    = Math.random() * Math.PI * 2;
+
+        this.tx          = this.x;
+        this.ty          = this.y;
+        this.targetSize  = this.size;
+        this.targetAlpha = this.alpha;
+        this.targetHue   = this.hue;
+
+        this.index   = index;
+        this.angle   = Math.random() * Math.PI * 2;
+        this.orbitR  = 50 + Math.pow(Math.random(), 0.55) * Math.min(width, height) * 0.44;
+        this.armId   = index % 3;
+
+        this.photoR        = 255;
+        this.photoG        = 130;
+        this.photoB        = 200;
+        this.hasPhotoColor = false;
+
+        this.homeX = this.x;
+        this.homeY = this.y;
     }
-    geo.setAttribute("position", new THREE.BufferAttribute(pos,3));
-    geo.setAttribute("color",    new THREE.BufferAttribute(col,3));
-    starField = new THREE.Points(geo, new THREE.PointsMaterial({
-      size:1.7, vertexColors:true, transparent:true, opacity:.8, sizeAttenuation:false
-    }));
-    scene.add(starField);
-  }
 
-  function _buildNebula() {
-    const mk = (N,ca,cb,sp) => {
-      const geo = new THREE.BufferGeometry();
-      const pos = new Float32Array(N*3), col = new Float32Array(N*3);
-      const A = new THREE.Color(ca), B = new THREE.Color(cb);
-      for (let i=0; i<N; i++) {
-        const r=Math.random()*sp, th=Math.random()*Math.PI*2, ph=Math.acos(2*Math.random()-1);
-        pos[i*3]=r*Math.sin(ph)*Math.cos(th); pos[i*3+1]=r*Math.sin(ph)*Math.sin(th)*.5; pos[i*3+2]=r*Math.cos(ph)-200;
-        const m=Math.random();
-        col[i*3]=A.r+(B.r-A.r)*m; col[i*3+1]=A.g+(B.g-A.g)*m; col[i*3+2]=A.b+(B.b-A.b)*m;
-      }
-      geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
-      geo.setAttribute("color",   new THREE.BufferAttribute(col,3));
-      return new THREE.Points(geo, new THREE.PointsMaterial({
-        size:3.2, vertexColors:true, transparent:true, opacity:.32,
-        sizeAttenuation:true, blending:THREE.AdditiveBlending, depthWrite:false
-      }));
-    };
-    nebula1 = mk(600,"#ff6ec7","#a855f7",300);
-    nebula2 = mk(450,"#a855f7","#22d3ee",260);
-    nebula2.position.set(140,70,-50);
-    scene.add(nebula1); scene.add(nebula2);
-  }
+    update(now) {
+        const ef = isFreePlay ? currentEffect : 'none';
 
-  function triggerWarp() {
-    warpActive = true; warpSpeed = 0;
-    setTimeout(()=>{ warpActive=false; warpSpeed=0; }, 1200);
-  }
+        if (ef === 'name' || ef === 'shaka') {
+            const fx = (this.tx - this.x) * 0.018;
+            const fy = (this.ty - this.y) * 0.018;
+            this.vx  = (this.vx + fx) * 0.78;
+            this.vy  = (this.vy + fy) * 0.78;
 
-  function _loop() {
-    requestAnimationFrame(_loop); clock += .004;
-    if (starField) starField.rotation.y = clock*.04;
-    if (nebula1) { nebula1.rotation.y=clock*.06; nebula1.rotation.x=Math.sin(clock*.3)*.05; }
-    if (nebula2) { nebula2.rotation.y=-clock*.05; nebula2.rotation.z=clock*.02; }
-    if (warpActive) {
-      warpSpeed = Math.min(warpSpeed+.8, 24);
-      camera.position.z -= warpSpeed;
-      if (camera.position.z < 200) camera.position.z = 600;
+        } else if (ef === 'blackhole') {
+            const dx   = cursorX - this.x;
+            const dy   = cursorY - this.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+            const pull  = Math.min(5.5, 1100 / (dist * dist));
+            const swirl = 1.4 / Math.sqrt(dist);
+            this.vx += (dx / dist) * pull  + (-dy / dist) * swirl;
+            this.vy += (dy / dist) * pull  + ( dx / dist) * swirl;
+            this.vx *= 0.86;
+            this.vy *= 0.86;
+            if (dist < 7) {
+                const ang = Math.random() * Math.PI * 2;
+                const r   = 180 + Math.random() * Math.min(width, height) * 0.38;
+                this.x    = cursorX + Math.cos(ang) * r;
+                this.y    = cursorY + Math.sin(ang) * r;
+                this.vx   = 0; this.vy = 0;
+            }
+
+        } else if (ef === 'galaxy') {
+            const speedFactor = 0.003 + (1 / (this.orbitR + 1)) * 0.28;
+            this.angle += speedFactor;
+            const cx    = width / 2, cy = height / 2;
+            const arm   = this.armId * (Math.PI * 2 / 3);
+            const spiralAng = arm + this.angle + this.orbitR * 0.004;
+            const orbitX    = cx + Math.cos(spiralAng) * this.orbitR;
+            const orbitY    = cy + Math.sin(spiralAng) * this.orbitR * 0.36;
+            this.vx  = (this.vx + (orbitX - this.x) * 0.009) * 0.90;
+            this.vy  = (this.vy + (orbitY - this.y) * 0.009) * 0.90;
+
+        } else if (ef === 'trail') {
+            const dx   = cursorX - this.x;
+            const dy   = cursorY - this.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+            if (dist < 160) {
+                const force = (160 - dist) / 160;
+                this.vx -= (dx / dist) * force * 5.5;
+                this.vy -= (dy / dist) * force * 5.5;
+            }
+            this.vx += (this.homeX - this.x) * 0.0025;
+            this.vy += (this.homeY - this.y) * 0.0025;
+            this.vx *= 0.91;
+            this.vy *= 0.91;
+
+        } else {
+            this.vx += (Math.random() - 0.5) * 0.03;
+            this.vy += (Math.random() - 0.5) * 0.03;
+            this.vx *= 0.985;
+            this.vy *= 0.985;
+        }
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        const buf = 24;
+        if (this.x < -buf)          this.x = width  + buf;
+        if (this.x > width  + buf)  this.x = -buf;
+        if (this.y < -buf)          this.y = height + buf;
+        if (this.y > height + buf)  this.y = -buf;
+
+        this.size  += (this.targetSize  - this.size)  * 0.055;
+        this.alpha += (this.targetAlpha - this.alpha) * 0.055;
+        this.hue   += (this.targetHue   - this.hue)   * 0.055;
+    }
+
+    draw(now) {
+        const tw = 0.78 + Math.sin(now * 0.0025 + this.twinkle) * 0.22;
+        const a  = Math.max(0, Math.min(1, this.alpha * tw));
+        if (a < 0.012 || this.size < 0.08) return;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        if (this.hasPhotoColor) {
+            const r = this.photoR, g = this.photoG, b = this.photoB;
+            ctx.globalAlpha = a * 0.18;
+            const grd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 3.5);
+            grd.addColorStop(0,   `rgba(${r},${g},${b},1)`);
+            grd.addColorStop(0.5, `rgba(${r},${Math.round(g*0.55)},${b},0.35)`);
+            grd.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = grd;
+            ctx.fill();
+            ctx.globalAlpha = a;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 0.55, 0, Math.PI * 2);
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fill();
+        } else {
+            // Blackhole mode: dot lebih kecil dari default
+            const isBH = (isFreePlay && currentEffect === 'blackhole');
+            const glowMult = isBH ? 3.2 : 4.5;
+            const coreMult = isBH ? 0.45 : 0.65;
+
+            ctx.globalAlpha = a * 0.20;
+            const grd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * glowMult);
+            grd.addColorStop(0,   `hsla(${this.hue},92%,80%,1)`);
+            grd.addColorStop(0.45,`hsla(${this.hue},80%,62%,0.5)`);
+            grd.addColorStop(1,   `hsla(${this.hue},70%,50%,0)`);
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * glowMult, 0, Math.PI * 2);
+            ctx.fillStyle = grd;
+            ctx.fill();
+            ctx.globalAlpha = a;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * coreMult, 0, Math.PI * 2);
+            ctx.fillStyle = `hsl(${this.hue},96%,90%)`;
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+}
+
+// ═══════════════════════════════════════════════════
+//  EXTRA PARTICLE CLASS  (name & shaka mode)
+//  Hidup & mati bersama mode — tidak punya fisika,
+//  hanya bergerak spring sederhana menuju tx/ty.
+// ═══════════════════════════════════════════════════
+class ExtraParticle {
+    constructor(tx, ty, isPhoto, r, g, b) {
+        // Spawn dari posisi acak di layar
+        this.x  = Math.random() * width;
+        this.y  = Math.random() * height;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.tx = tx;
+        this.ty = ty;
+
+        this.isPhoto = isPhoto;
+        this.r = r; this.g = g; this.b = b;
+
+        // Ukuran kecil seperti partikel utama — tidak glow lebay
+        this.size        = 0.6 + Math.random() * 0.9;
+        this.alpha       = 0;   // fade in
+        this.targetAlpha = 0.7 + Math.random() * 0.3;
+        this.hue         = isPhoto ? (300 + Math.random() * 50) : (285 + Math.random() * 80);
+        this.twinkle     = Math.random() * Math.PI * 2;
+    }
+
+    update() {
+        const fx = (this.tx - this.x) * 0.016;
+        const fy = (this.ty - this.y) * 0.016;
+        this.vx  = (this.vx + fx) * 0.80;
+        this.vy  = (this.vy + fy) * 0.80;
+        this.x  += this.vx;
+        this.y  += this.vy;
+        this.alpha += (this.targetAlpha - this.alpha) * 0.055;
+    }
+
+    draw(now) {
+        const tw = 0.8 + Math.sin(now * 0.003 + this.twinkle) * 0.2;
+        const a  = Math.max(0, Math.min(1, this.alpha * tw));
+        if (a < 0.01) return;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        if (this.isPhoto) {
+            // Putih atau pink — dua warna
+            const isPink = (this.hue > 315);
+            const rc = isPink ? 255 : 240;
+            const gc = isPink ? 100 : 230;
+            const bc = isPink ? 180 : 240;
+
+            // Glow minimal
+            ctx.globalAlpha = a * 0.15;
+            const grd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 3);
+            grd.addColorStop(0, `rgba(${rc},${gc},${bc},1)`);
+            grd.addColorStop(1, `rgba(${rc},${gc},${bc},0)`);
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 3, 0, Math.PI * 2);
+            ctx.fillStyle = grd;
+            ctx.fill();
+            // Core
+            ctx.globalAlpha = a;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${rc},${gc},${bc},1)`;
+            ctx.fill();
+        } else {
+            // Name mode — glow kecil, bukan oversized
+            ctx.globalAlpha = a * 0.12;
+            const grd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 3);
+            grd.addColorStop(0,   `hsla(${this.hue},90%,85%,1)`);
+            grd.addColorStop(1,   `hsla(${this.hue},70%,55%,0)`);
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 3, 0, Math.PI * 2);
+            ctx.fillStyle = grd;
+            ctx.fill();
+            ctx.globalAlpha = a;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = `hsl(${this.hue},95%,92%)`;
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+}
+
+// ─── INIT PARTICLES ──────────────────────────────
+function initParticles() {
+    particles = [];
+    const count = Math.min(1400, Math.max(600, Math.floor((width * height) / 7500)));
+    for (let i = 0; i < count; i++) particles.push(new Particle(i, count));
+    particles.forEach(p => {
+        p.tx = p.x; p.ty = p.y;
+        p.homeX = p.x; p.homeY = p.y;
+    });
+}
+
+// ─── CLEAR EXTRA PARTICLES ───────────────────────
+function clearExtraParticles() {
+    extraParticles = [];
+}
+
+// ─── MAIN ANIMATE LOOP ───────────────────────────
+function animate() {
+    const now = performance.now();
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = isFreePlay ? 0.10 : 0.16;
+    ctx.fillStyle   = '#050505';
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalAlpha = 1;
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle   = 'white';
+    for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Update & draw main particles
+    particles.forEach(p => { p.update(now); p.draw(now); });
+
+    // Update & draw extra particles (name / shaka)
+    if (extraParticles.length > 0) {
+        extraParticles.forEach(p => { p.update(); p.draw(now); });
+    }
+
+    // Trail overlay
+    if (isFreePlay && currentEffect === 'trail') {
+        drawTrailGlow();
+    } else if (isFreePlay && (currentEffect === 'name' || currentEffect === 'shaka')) {
+        // Biarkan tctx overlay tetap — glow teks / foto sudah di-render saat mode set
+        // (tidak di-clear di sini)
     } else {
-      camera.position.z += (600-camera.position.z)*.03;
+        tctx.clearRect(0, 0, width, height);
     }
-    renderer.render(scene, camera);
-  }
 
-  function _listen() {
-    window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth/window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-  }
+    requestAnimationFrame(animate);
+}
 
-  return { init, triggerWarp };
-})();
+initParticles();
+animate();
 
+// ═══════════════════════════════════════════════════
+//  MODE SETTERS
+// ═══════════════════════════════════════════════════
 
-/* ──────────────────────────────────────────────
-   §2  HAND TRACKING — MediaPipe / mouse fallback
-   ────────────────────────────────────────────── */
-const HandTracking = (() => {
-  let hands, lastPinch=false, pinchCD=false;
-  const cbs = { onMove:null, onPinch:null, onRelease:null };
-  const IT=8, TT=4, MT=12, RT=16, PT=20;
+function setModeNameTargets() {
+    clearExtraParticles();
 
-  async function init(videoEl) {
-    if (typeof Hands === "undefined") { _mouse(); return; }
-    hands = new Hands({ locateFile: f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-    hands.setOptions({ maxNumHands:2, modelComplexity:0, minDetectionConfidence:.65, minTrackingConfidence:.55 });
-    hands.onResults(_res);
-    const cam = new Camera(videoEl, {
-      onFrame: async () => { await hands.send({ image: videoEl }); },
-      width:320, height:240,
-    });
-    try {
-      await cam.start();
-      document.getElementById("cam-status").textContent = "✓ Camera aktif — angkat tangan!";
-    } catch(e) {
-      document.getElementById("cam-status").textContent = "⚠ Camera denied. Pakai mouse/touch.";
-      _mouse();
-    }
-  }
+    const nameImg = new Image();
+    nameImg.src = '/assets/text.png';
 
-  function _res(r) {
-    if (!r.multiHandLandmarks || !r.multiHandLandmarks.length) return;
-    const lm = r.multiHandLandmarks[0];
-    const ix = (1-lm[IT].x)*window.innerWidth, iy = lm[IT].y*window.innerHeight;
-    if (cbs.onMove) cbs.onMove(ix, iy);
-    const dx=lm[IT].x-lm[TT].x, dy=lm[IT].y-lm[TT].y;
-    const pin = Math.sqrt(dx*dx+dy*dy) < .07;
-    if (pin && !lastPinch && !pinchCD) {
-      lastPinch=true; pinchCD=true;
-      if (cbs.onPinch) cbs.onPinch(ix, iy);
-      setTimeout(()=>pinchCD=false, 650);
-    } else if (!pin && lastPinch) {
-      lastPinch=false; if (cbs.onRelease) cbs.onRelease(ix, iy);
-    }
-    const tips=[IT,MT,RT,PT]; let ext=0;
-    for (let i=0;i<4;i++) if (lm[tips[i]].y<lm[tips[i]-2].y) ext++;
-    document.getElementById("gesture-label").textContent =
-      pin?"PINCH 👌":ext===4?"OPEN PALM ✋":ext===1?"POINTING ☝":ext===2?"PEACE ✌":"IDLE";
-  }
+    const applyNameMode = (img) => {
+        // Skala sama persis dengan overlay
+        const scaleT = Math.min(width / img.width, height / img.height) * 0.90;
+        const W  = Math.round(img.width  * scaleT);
+        const H  = Math.round(img.height * scaleT);
+        const offX = Math.round((width  - W) / 2);
+        const offY = Math.round((height - H) / 2);
 
-  function _mouse() {
-    document.addEventListener("mousemove", e=>{ if(cbs.onMove) cbs.onMove(e.clientX,e.clientY); });
-    document.addEventListener("click",     e=>{ if(cbs.onPinch) cbs.onPinch(e.clientX,e.clientY); });
-    document.addEventListener("touchmove", e=>{ const t=e.touches[0]; if(cbs.onMove) cbs.onMove(t.clientX,t.clientY); },{passive:true});
-    document.addEventListener("touchend",  e=>{ const t=e.changedTouches[0]; if(cbs.onPinch) cbs.onPinch(t.clientX,t.clientY); });
-    document.getElementById("cam-status").textContent = "Mouse / touch mode";
-    document.getElementById("gesture-label").textContent = "MOUSE MODE";
-  }
+        // Sample pixel dari text.png
+        const off  = document.createElement('canvas');
+        off.width  = W; off.height = H;
+        const octx = off.getContext('2d');
+        octx.drawImage(img, 0, 0, W, H);
+        const d = octx.getImageData(0, 0, W, H).data;
 
-  function on(ev, fn) { cbs[ev]=fn; }
-  return { init, on };
-})();
+        const pts = [];
+        const step = 2;
+        for (let py = 0; py < H; py += step) {
+            for (let px = 0; px < W; px += step) {
+                const idx = (py * W + px) * 4;
+                const a   = d[idx + 3];            // alpha channel
+                const br  = (d[idx] + d[idx+1] + d[idx+2]) / 3;
+                if (a > 40 || br > 30) {           // ← threshold
+                    pts.push({ x: offX + px, y: offY + py, br });
+                }
+            }
+        }
+        if (pts.length === 0) return;
 
+        // Shuffle
+        for (let i = pts.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pts[i], pts[j]] = [pts[j], pts[i]];
+        }
 
-/* ──────────────────────────────────────────────
-   §3  UI SYSTEM — cursor, hover, pinch-click
-   ────────────────────────────────────────────── */
-const UISystem = (() => {
-  const cursor = document.getElementById("hand-cursor");
-  const ripple = document.getElementById("pinch-ripple");
-  const SEL = ".holo-btn,.answer-btn,.puzzle-tile,.story-next-btn";
-  let hov = null;
-
-  function init() {
-    HandTracking.on("onMove",    _mv);
-    HandTracking.on("onPinch",   _pn);
-    HandTracking.on("onRelease", ()=>cursor.classList.remove("pinching"));
-  }
-
-  function _mv(x,y) {
-    cursor.style.left = x+"px"; cursor.style.top = y+"px";
-    const el = document.elementFromPoint(x,y);
-    const t  = el ? el.closest(SEL) : null;
-    if (t !== hov) {
-      if (hov) hov.classList.remove("hovered");
-      hov = t;
-      if (hov) { hov.classList.add("hovered"); AudioSystem.play("hover"); }
-    }
-  }
-
-  function _pn(x,y) {
-    cursor.classList.add("pinching");
-    ripple.style.left=x+"px"; ripple.style.top=y+"px";
-    ripple.classList.remove("ripple-active"); void ripple.offsetWidth;
-    ripple.classList.add("ripple-active");
-    AudioSystem.play("click");
-    if (hov) {
-      hov.classList.add("pinched"); hov.click();
-      setTimeout(()=>hov&&hov.classList.remove("pinched"), 260);
-    }
-  }
-
-  return { init };
-})();
-
-
-/* ──────────────────────────────────────────────
-   §4  QUESTION FLOW + FEEDBACK COMBO
-   Stores ALL 4 answers → builds ONE combo paragraph
-   ────────────────────────────────────────────── */
-const QuestionFlow = (() => {
-  let qi = 0;
-  const mem = {};   // { key: chosenOptionText }
-
-  /* ── 4 QUESTIONS — each answer has its own fb snippet ── */
-  const QS = [
-    {
-      key: "ketenangan",
-      q: "🌟 Di mana kamu biasanya menemukan ketenangan terbesar?",
-      opts: [
-        "Di bawah langit malam yang sunyi",
-        "Di tengah keramaian kota",
-        "Di alam bebas — hutan, gunung, laut",
-        "Di rumah bersama orang tersayang",
-      ],
-      fb: [
-        "kamu tipe yang nemu tenangnya di bawah langit malam... yang pasti aesthetic banget sih 🌙✨",
-        "ternyata keramaian itu justru tempat kamu nemu diri sendiri — unik, tapi makes sense 🌆",
-        "alam bebas — jiwa bebas emang susah dijinakkin, dan itu hal yang bagus 🌿",
-        "rumah dan orang-orang tersayang, yang paling penting emang itu 🏡",
-      ],
-    },
-    {
-      key: "harapan",
-      q: "🎂 Apa harapan terbesarmu di ulang tahun ini?",
-      opts: [
-        "Kesehatan & kebahagiaan selalu",
-        "Petualangan baru yang belum pernah ada",
-        "Mimpi-mimpi yang akhirnya terwujud",
-        "Ketenangan & hidup yang lebih damai",
-      ],
-      fb: [
-        "semoga kesehatan & kebahagiaan beneran selalu nemenin kamu ya, bukan cuma di hari ini 🌻",
-        "petualangan baru — semoga yang kamu bayangkan beneran kejadian dalam waktu deket ✈️",
-        "mimpi yang terwujud adalah hal yang paling worth it diperjuangin, semoga beneran kejadian 💫",
-        "ketenangan & hidup damai... itu doa yang dalam banget, semoga dikabulin 🌊",
-      ],
-    },
-    {
-      key: "tempat",
-      q: "✈️ Kalau bisa pergi ke mana saja, kamu paling ingin ke mana?",
-      opts: [
-        "Kota-kota tua Eropa yang tenang",
-        "Jepang — musim semi atau musim dingin",
-        "Alam bebas — gunung, pantai, hutan",
-        "Tetap di sini, tapi versi yang lebih damai",
-      ],
-      fb: [
-        "Eropa yang tenang, cobblestone dan kopi pagi — semoga beneran kesana suatu hari 🏛️",
-        "Jepang!! semoga musim semi atau musim dinginnya beneran kamu rasain langsung ya 🌸",
-        "kabur sebentar ke alam bebas, siapa yang ga mau coba — semoga bisa 🏔️",
-        "versi yang lebih damai dari tempat yang sama... itu doa yang bagus banget 💙",
-      ],
-    },
-    {
-      key: "galaksi",
-      q: "🚀 Kalau bisa hidup di mana saja di galaksi ini, kamu pilih...",
-      opts: [
-        "Planet baru yang sunyi & damai",
-        "Surfing nebula tanpa tujuan",
-        "Bikin rumah kecil di bulan",
-        "Kembali ke bumi — lebih dari cukup",
-      ],
-      fb: [
-        "planet sunyi & damai — kamu emang butuh ruang sendiri kadang-kadang, dan itu valid 🌑",
-        "surfing nebula tanpa tujuan... free spirit mode ON, vibes banget 😌✨",
-        "rumah di bulan! oke nanti kabarin ya, siapa tau aku jadi tetangga sebelah 🚀😂",
-        "kembali ke bumi — setuju sih, bumi aja udah cukup ajaib kok 🌍",
-      ],
-    },
-  ];
-
-  /* ── FEEDBACK COMBO BUILDER ──
-     Collects one fb snippet per question → weaves into
-     one flowing personal paragraph ── */
-  function _buildCombo() {
-    const snippets = QS.map(q => {
-      const idx = q.opts.findIndex(o => o === mem[q.key]);
-      return idx >= 0 ? q.fb[idx] : null;
-    }).filter(Boolean);
-
-    // Opening line
-    const openers = [
-      "oke jadi dari jawaban kamu tadi...",
-      "hmm, jadi kesimpulan sementaranya adalah...",
-      "berdasarkan jawaban kamu barusan —",
-    ];
-    const opener = openers[Math.floor(Math.random() * openers.length)];
-
-    // Weave snippets into one paragraph with connectors
-    const connectors = ["\n\nterus,\n", "\n\ndan ", "\n\nohh iya, ", "\n\n"];
-    let body = "";
-    snippets.forEach((s, i) => {
-      if (i === 0) body += s;
-      else body += connectors[Math.min(i-1, connectors.length-1)] + s;
-    });
-
-    // Closing
-    const closings = [
-      "\n\nsemoga hari ini jadi awal dari hal-hal baik yang kamu harapan itu tadi ✨",
-      "\n\npokoknya, semoga semua yang kamu minta dikabulin ya — amin 🌌",
-      "\n\nyah, begitulah kamu — dan itu cukup spesial 😄✨",
-    ];
-    const closing = closings[Math.floor(Math.random() * closings.length)];
-
-    return opener + "\n\n" + body + closing;
-  }
-
-  function start() {
-    qi = 0;
-    Object.keys(mem).forEach(k => delete mem[k]);
-    _show(0);
-  }
-
-  function _show(idx) {
-    if (idx >= QS.length) { _finish(); return; }
-    const q = QS[idx];
-    document.getElementById("q-number").textContent =
-      String(idx+1).padStart(2,"0") + " / " + String(QS.length).padStart(2,"0");
-
-    const box = document.getElementById("question-box");
-    box.style.animation = "none"; void box.offsetWidth;
-    box.style.animation = "fade-up .6s ease forwards";
-    document.getElementById("question-text").textContent = q.q;
-
-    const con = document.getElementById("answers-container");
-    con.innerHTML = "";
-    const L = ["A","B","C","D"];
-    q.opts.forEach((opt, i) => {
-      const btn = document.createElement("button");
-      btn.className = "answer-btn"; btn.dataset.letter = L[i];
-      btn.innerHTML = `<span class="answer-text">${opt}</span>`;
-      btn.style.opacity = "0";
-      btn.style.animation = `fade-up .5s ease ${.1*i+.3}s both`;
-      btn.onclick = () => _sel(q.key, opt, i);
-      con.appendChild(btn);
-    });
-  }
-
-  function _sel(key, text, idx) {
-    mem[key] = text;
-    document.querySelectorAll(".answer-btn").forEach(b => b.style.pointerEvents="none");
-    document.querySelectorAll(".answer-btn")[idx].classList.add("selected");
-    AudioSystem.play("select");
-    setTimeout(() => { qi++; SceneManager.warpTransition(() => _show(qi)); }, 750);
-  }
-
-  function _finish() {
-    // Build combo and show feedback scene
-    SceneManager.warpTransition(() => {
-      SceneManager.showScene("scene-feedback");
-      const combo = _buildCombo();
-      const el = document.getElementById("feedback-text");
-      el.style.opacity = "0"; el.textContent = combo;
-      void el.offsetWidth;
-      el.style.transition = "opacity .9s ease";
-      setTimeout(() => el.style.opacity = "1", 350);
-
-      const btn = document.getElementById("btn-feedback-continue");
-      btn.onclick = () => {
-        SceneManager.warpTransition(() => {
-          SceneManager.showScene("scene-puzzle");
-          CameraSystem.init();
+        // Main particles
+        particles.forEach((p, i) => {
+            const pt        = pts[i % pts.length];
+            p.tx            = pt.x + (Math.random() - 0.5) * 1.5;
+            p.ty            = pt.y + (Math.random() - 0.5) * 1.5;
+            p.targetSize    = 0.6 + Math.random() * 1.0;
+            p.targetAlpha   = 0.70 + Math.random() * 0.30;
+            p.targetHue     = 285 + Math.random() * 80;
+            p.hasPhotoColor = false;
         });
-      };
-    });
-  }
 
-  return { start };
-})();
+        // Extra particles
+        const extraCount = particles.length * 2;
+        for (let i = 0; i < extraCount; i++) {
+            const pt = pts[i % pts.length];
+            const ep = new ExtraParticle(
+                pt.x + (Math.random() - 0.5) * 1.5,
+                pt.y + (Math.random() - 0.5) * 1.5,
+                false, 0, 0, 0
+            );
+            ep.size        = 0.4 + Math.random() * 0.8;
+            ep.targetAlpha = 0.75 + Math.random() * 0.25;
+            ep.hue         = 270 + Math.random() * 100;
+            extraParticles.push(ep);
+        }
 
+        // Overlay text.png ke tctx dengan fade in
+        let fadeAlpha = 0;
+        const fadeInterval = setInterval(() => {
+            fadeAlpha += 0.012;
+            if (fadeAlpha >= 1) { clearInterval(fadeInterval); fadeAlpha = 1; }
 
-/* ──────────────────────────────────────────────
-   §5  CAMERA SYSTEM
-   ────────────────────────────────────────────── */
-const CameraSystem = (() => {
-  let stream=null, ready=false, used=false;
+            tctx.clearRect(0, 0, width, height);
+            tctx.save();
+            tctx.globalCompositeOperation = 'lighter';
+            tctx.globalAlpha = 0.20 * fadeAlpha;
+            tctx.filter = 'blur(8px) saturate(2) hue-rotate(270deg)';
+            tctx.drawImage(img, offX, offY, W, H);
+            tctx.globalAlpha = 0.15 * fadeAlpha;
+            tctx.filter = 'blur(2px) saturate(3) hue-rotate(270deg)';
+            tctx.drawImage(img, offX, offY, W, H);
+            tctx.restore();
+        }, 16);
+    };
 
-  async function init() {
-    const vid = document.getElementById("capture-video");
-    const btn = document.getElementById("btn-capture");
-    if (btn) btn.onclick = () => _capture();
-
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video:{width:330,height:220}, audio:false });
-      vid.srcObject = stream; await vid.play(); ready = true;
-      HandTracking.on("onPinch", () => {
-        if (!used && ready && document.getElementById("puzzle-intro").style.display !== "none")
-          _capture();
-      });
-    } catch(e) { ready=false; _placeholder(); }
-  }
-
-  function _capture() {
-    if (used) return; used = true;
-    if (!ready) { _placeholder(); return; }
-    const vid = document.getElementById("capture-video");
-    const cvs = document.getElementById("capture-canvas");
-    cvs.width=330; cvs.height=220;
-    const ctx = cvs.getContext("2d");
-    ctx.save(); ctx.scale(-1,1); ctx.drawImage(vid,-330,0,330,220); ctx.restore();
-    if (stream) stream.getTracks().forEach(t=>t.stop());
-    AudioSystem.play("capture");
-    PuzzleGame.start(cvs.toDataURL("image/jpeg",.88));
-  }
-
-  function _placeholder() {
-    used = true;
-    const cvs = document.createElement("canvas"); cvs.width=330; cvs.height=220;
-    const ctx = cvs.getContext("2d");
-    const g = ctx.createLinearGradient(0,0,330,220);
-    g.addColorStop(0,"#ff6ec7"); g.addColorStop(.5,"#a855f7"); g.addColorStop(1,"#22d3ee");
-    ctx.fillStyle=g; ctx.fillRect(0,0,330,220);
-    ctx.fillStyle="rgba(255,255,255,.12)";
-    for (let i=0;i<30;i++) {
-      ctx.beginPath(); ctx.arc(Math.random()*330,Math.random()*220,Math.random()*16+2,0,Math.PI*2); ctx.fill();
-    }
-    ctx.fillStyle="#fff"; ctx.font="bold 19px Orbitron,monospace"; ctx.textAlign="center";
-    ctx.fillText("HBD MEYSAA 🎂",165,110);
-    PuzzleGame.start(cvs.toDataURL());
-  }
-
-  return { init };
-})();
-
-
-/* ──────────────────────────────────────────────
-   §6  PUZZLE GAME
-   - 6 tiles (3 cols × 2 rows)
-   - gap: 0  → seamless photo
-   - tile borders: thin rgba outline only
-   - click/pinch to grab → click/pinch target to swap
-   ────────────────────────────────────────────── */
-const PuzzleGame = (() => {
-  const COLS=3, ROWS=2, TOTAL=6;
-  const TW=110, TH=82;   // tile pixel size
-  let tiles=[], grabbed=null, solved=false, t0=0;
-
-  function start(img) {
-    document.getElementById("puzzle-intro").style.display = "none";
-    document.getElementById("puzzle-game").style.display  = "block";
-
-    const board = document.getElementById("puzzle-board");
-    // No gap — seamless image
-    board.style.gridTemplateColumns = `repeat(${COLS},${TW}px)`;
-    board.style.gridTemplateRows    = `repeat(${ROWS},${TH}px)`;
-    board.style.gap = "0";
-    board.innerHTML = ""; tiles = [];
-
-    const order = _shuffle([...Array(TOTAL).keys()]);
-    order.forEach((ci, si) => {
-      const div = document.createElement("div");
-      div.className = "puzzle-tile";
-      const c=ci%COLS, r=Math.floor(ci/COLS);
-      div.style.width  = TW+"px";
-      div.style.height = TH+"px";
-      div.style.backgroundImage    = `url(${img})`;
-      div.style.backgroundSize     = `${COLS*TW}px ${ROWS*TH}px`;
-      div.style.backgroundPosition = `-${c*TW}px -${r*TH}px`;
-      const t = { el:div, ci, si }; tiles.push(t); board.appendChild(div);
-      div.addEventListener("click", () => _click(t));
-    });
-
-    solved=false; t0=Date.now();
-    _listenGesture();
-  }
-
-  function _click(t) {
-    if (solved) return;
-    if (!grabbed) {
-      grabbed=t; t.el.classList.add("grabbed"); AudioSystem.play("hover");
+    if (nameImg.complete) {
+        applyNameMode(nameImg);
     } else {
-      if (grabbed===t) { t.el.classList.remove("grabbed"); grabbed=null; return; }
-      _swap(grabbed,t); grabbed.el.classList.remove("grabbed"); grabbed=null;
-      AudioSystem.play("click"); _check();
+        nameImg.onload = () => applyNameMode(nameImg);
     }
-  }
+}
 
-  function _listenGesture() {
-    HandTracking.on("onPinch", (x,y) => {
-      if (solved) return;
-      if (document.getElementById("puzzle-game").style.display === "none") return;
-      const el = document.elementFromPoint(x,y); if (!el) return;
-      const t = tiles.find(t => t.el===el || t.el.contains(el));
-      if (t) _click(t);
+// ── SHAKA / FOTO MODE 🤙 ─────────────────────────
+function setModeShakaTargets() {
+    clearExtraParticles();
+
+    if (!shakaReady || !shakaImg) {
+        setModeNoneTargets();
+        return;
+    }
+
+    const maxH  = Math.min(height * 0.95, height);
+    const scale = maxH / shakaImg.height;
+    const W     = Math.round(shakaImg.width  * scale);
+    const H     = Math.round(shakaImg.height * scale);
+    const offX  = Math.round((width  - W) / 2);
+    const offY  = Math.round((height - H) / 2);
+
+    const off  = document.createElement('canvas');
+    off.width  = W; off.height = H;
+    const octx = off.getContext('2d');
+    octx.drawImage(shakaImg, 0, 0, W, H);
+    const d = octx.getImageData(0, 0, W, H).data;
+
+    // Threshold lebih rendah — tangkap lebih banyak pixel termasuk area semi-gelap
+    const BR_THRESHOLD = 18;
+    const allPts = [];
+    const sampleStep = 2; // lebih rapat dari sebelumnya (3→2)
+
+    for (let py = 0; py < H; py += sampleStep) {
+        for (let px = 0; px < W; px += sampleStep) {
+            const idx = (py * W + px) * 4;
+            const r   = d[idx], g = d[idx+1], b = d[idx+2];
+            const br  = (r + g + b) / 3;
+            if (br > BR_THRESHOLD) {
+                allPts.push({ x: offX + px, y: offY + py, r, g, b, br });
+            }
+        }
+    }
+    if (allPts.length === 0) { setModeNoneTargets(); return; }
+
+    for (let i = allPts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allPts[i], allPts[j]] = [allPts[j], allPts[i]];
+    }
+
+    // Main particles — pakai warna foto asli
+    particles.forEach((p, i) => {
+        const pt          = allPts[i % allPts.length];
+        p.tx              = pt.x + (Math.random() - 0.5) * 1.5;
+        p.ty              = pt.y + (Math.random() - 0.5) * 1.5;
+        p.photoR          = Math.min(255, Math.round(pt.r * 1.1 + 20));
+        p.photoG          = Math.min(255, Math.round(pt.g * 0.68 + 8));
+        p.photoB          = Math.min(255, Math.round(pt.b * 1.1 + 40));
+        p.hasPhotoColor   = true;
+        p.targetSize      = 0.5 + (pt.br / 255) * 1.1;
+        p.targetAlpha     = 0.60 + (pt.br / 255) * 0.40;
+        p.targetHue       = 300 + Math.random() * 50;
     });
-  }
 
-  function _swap(a,b) {
-    const board = document.getElementById("puzzle-board");
-    const ch = [...board.children];
-    const ia=ch.indexOf(a.el), ib=ch.indexOf(b.el);
-    if (ia<ib) { board.insertBefore(a.el,b.el.nextSibling); board.insertBefore(b.el,ch[ia]); }
-    else       { board.insertBefore(b.el,a.el.nextSibling); board.insertBefore(a.el,ch[ib]); }
-    const tmp=a.si; a.si=b.si; b.si=tmp;
-  }
+    // Extra particles — 4x density, warna mengikuti foto
+    const extraCount = particles.length * 4;
+    for (let i = 0; i < extraCount; i++) {
+        const pt = allPts[i % allPts.length];
+        const ep = new ExtraParticle(
+            pt.x + (Math.random() - 0.5) * 1.5,
+            pt.y + (Math.random() - 0.5) * 1.5,
+            true, pt.r, pt.g, pt.b
+        );
+        ep.hue  = Math.random() > 0.5 ? 305 + Math.random() * 25 : 275 + Math.random() * 25;
+        ep.size = 0.3 + (pt.br / 255) * 0.8;
+        ep.targetAlpha = 0.65 + Math.random() * 0.35;
+        extraParticles.push(ep);
+    }
 
-  function _check() {
-    const board = document.getElementById("puzzle-board");
-    const ch = [...board.children];
-    // Solved when every tile is in its correct position (correctIdx === slot position)
-    if (!tiles.every(t => ch.indexOf(t.el) === t.ci)) return;
-    solved = true;
-    tiles.forEach(t => t.el.classList.add("correct"));
-    AudioSystem.play("victory");
-    const elapsed = (Date.now()-t0)/1000;
-    const msg = elapsed < 60 ? "wahh cepet juga kamu 😭✨" : "wkwk lama juga ya 😭";
-    setTimeout(() => FinalStory.start(msg), 1100);
-  }
+    // ── Render siluet foto sebagai glow overlay di tctx ──
+    // Biar outline foto tetap kelihatan walau partikel masih bergerak
+    
+// Ganti dua baris drawImage di atas dengan ini:
+let fadeAlpha = 0;
+const fadeInterval = setInterval(() => {
+    fadeAlpha += 0.01;                            // ← kecepatan fade in (0.01 = lambat, 0.05 = cepat)
+    if (fadeAlpha >= 1) { clearInterval(fadeInterval); fadeAlpha = 1; }
 
-  function _shuffle(arr) {
-    // Fisher-Yates, guarantee not already solved
-    do {
-      for (let i=arr.length-1; i>0; i--) {
-        const j=~~(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];
-      }
-    } while (arr.every((v,i)=>v===i));
-    return arr;
-  }
-
-  return { start };
-})();
-
-
-/* ──────────────────────────────────────────────
-   §7  FINAL STORY — cinematic credits roll
-
-   DESIGN:
-   - Text is NEVER removed; each beat APPENDS a new line
-   - #credits-track slides upward so the newest line
-     settles near the lower-third of the viewport
-   - Sentences ending "..." → auto-advance (no button)
-     with dynamic delay based on text length
-   - Other sentences → show ↓ NEXT button
-   ────────────────────────────────────────────── */
-const FinalStory = (() => {
-
-  /*
-    type:
-      "auto"    → auto-advance after dynamic delay (no button needed)
-      "btn"     → show ↓ NEXT button; user must tap
-      "victory" → show ↓ NEXT; tapping goes to victory scene
-  */
-  const BEATS = [
-    { text:"Hay meysaa...",                                                                                       type:"auto"    },
-    { text:"HBD YA.. semoga hal-hal baik selalu datang ke kamu, dan",                                            type:"btn"     },
-    { text:"apa yang kamu usahakan bisa tercapai ...",                                                           type:"auto"    },
-    { text:"aminn",                                                                                               type:"btn"     },
-    { text:"Ohh iyaa mey...",                                                                                     type:"auto"    },
-    { text:"Aku juga minta maaf kalau selama ini pernah ada sikap atau...",                                      type:"auto"    },
-    { text:"kata2ku yang bikin kamu ga nyaman, sengaja maupun ga sengaja..",                                     type:"auto"    },
-    { text:"kado itu bukan punya maksud apapun kok, cuma bentuk ucapan aja..",                                   type:"auto"    },
-    { text:"dan",                                                                                                 type:"btn"     },
-    { text:"tenang aja, aku udah ngga ngejer kamu lagi, tapii..",                                                type:"auto"    },
-    { text:"insyaallah :v",                                                                                       type:"btn"     },
-    { text:"Aku cuma pengen semuanya tetep baik tanpa ada rasa gaenak satu sama lain...\nOnce again, HBD YAA!!,, jaga diri baek-baek ✨", type:"victory" },
-  ];
-
-  let beatIdx = 0;
-  let trackY  = 0;   // cumulative upward translation of #credits-track (px)
-  let speedMsg = "";
-
-  /* ── Dynamic delay for auto-advance:
-       ~400ms per word + 1500ms bonus for trailing dots
-       clamped 3s–7s ── */
-  function _delay(text) {
-    const words = text.trim().split(/\s+/).length;
-    const base  = Math.max(3000, words * 420);
-    const bonus = (text.endsWith("...")||text.endsWith("..")) ? 1500 : 0;
-    return Math.min(base + bonus, 7000);
-  }
-
-  /* ── Line CSS class helper ── */
-  function _cls(text) {
-    if (text === "aminn")                             return "credit-line accent";
-    if (text === "dan")                               return "credit-line muted";
-    if (text.includes(":v"))                          return "credit-line accent";
-    if (text.includes("Once again")||text.includes("HBD YAA"))
-                                                      return "credit-line emphasis";
-    return "credit-line";
-  }
-
-  /* ── Entry point ── */
-  function start(msg) {
-    speedMsg=msg; beatIdx=0; trackY=0;
-    SceneManager.warpTransition(() => {
-      SceneManager.showScene("scene-story");
-      _showResultMsg();
+    tctx.clearRect(0, 0, width, height);
+    tctx.save();
+    tctx.globalCompositeOperation = 'lighter';
+    tctx.globalAlpha = 0.22 * fadeAlpha;
+    tctx.filter = 'blur(6px) saturate(2) hue-rotate(20deg)';
+    tctx.drawImage(shakaImg, offX, offY, W, H);
+    tctx.filter = 'blur(2px) saturate(3) hue-rotate(20deg)';
+    tctx.globalAlpha = 0.14 * fadeAlpha;
+    tctx.drawImage(shakaImg, offX, offY, W, H);
+    tctx.restore();
+}, 16);              
+}            
+                 // ← interval ~60fps
+// ── BLACKHOLE ✊ ──────────────────────────────────
+function setModeBlackholeTargets() {
+    clearExtraParticles();
+    particles.forEach(p => {
+        // Dot kecil — biar efek spiral lebih halus
+        p.targetSize      = 0.5 + Math.random() * 0.9;
+        p.targetAlpha     = 0.35 + Math.random() * 0.45;
+        p.targetHue       = 265 + Math.random() * 65;
+        p.hasPhotoColor   = false;
     });
-  }
+}
 
-  /* ── Step 1: show puzzle speed result message ── */
-  function _showResultMsg() {
-    const el = document.getElementById("puzzle-result-msg");
-    el.textContent = speedMsg;
-    setTimeout(()=>el.classList.add("visible"), 300);
-    setTimeout(()=>{
-      el.classList.remove("visible");
-      setTimeout(_showPopup, 600);
-    }, 2600);
-  }
+// ── GALAXY 🖐️ ────────────────────────────────────
+function setModeGalaxyTargets() {
+    clearExtraParticles();
+    particles.forEach((p, i) => {
+        p.orbitR        = 35 + Math.pow(Math.random(), 0.5) * Math.min(width, height) * 0.46;
+        p.armId         = i % 3;
+        p.targetSize    = 0.7 + Math.random() * 1.6;
+        p.targetAlpha   = 0.32 + Math.random() * 0.58;
+        p.targetHue     = 275 + Math.random() * 85;
+        p.hasPhotoColor = false;
+    });
+}
 
-  /* ── Step 2: "Bentar sekali lagi..." popup ── */
-  function _showPopup() {
-    const pop = document.getElementById("story-popup");
-    pop.style.display="block"; pop.style.opacity="0";
-    pop.style.transition="opacity .8s ease";
-    void pop.offsetWidth; pop.style.opacity="1";
-    setTimeout(()=>{
-      pop.style.opacity="0";
-      setTimeout(()=>{ pop.style.display="none"; _startCredits(); }, 800);
-    }, 2300);
-  }
+// ── TRAIL ☝️ ─────────────────────────────────────
+function setModeTrailTargets() {
+    clearExtraParticles();
+    particles.forEach(p => {
+        p.homeX         = p.x;
+        p.homeY         = p.y;
+        p.targetSize    = 1.4 + Math.random() * 2.0;
+        p.targetAlpha   = 0.55 + Math.random() * 0.45;
+        p.targetHue     = 285 + Math.random() * 80;
+        p.hasPhotoColor = false;
+    });
+}
 
-  /* ── Step 3: begin credits roll ── */
-  function _startCredits() {
-    const credits = document.getElementById("story-credits");
-    credits.style.display = "flex";
-    // Clear any previous content
-    document.getElementById("credits-track").innerHTML = "";
-    trackY = 0;
-    _renderBeat(0);
-  }
+// ── NONE / NEBULA DEFAULT ────────────────────────
+function setModeNoneTargets() {
+    clearExtraParticles();
+    particles.forEach(p => {
+        p.tx            = Math.random() * width;
+        p.ty            = Math.random() * height;
+        p.targetSize    = Math.random() * 1.6 + 0.5;
+        p.targetAlpha   = Math.random() * 0.35 + 0.12;
+        p.targetHue     = 290 + Math.random() * 70;
+        p.hasPhotoColor = false;
+    });
+}
 
-  /* ── Render one beat (appends line, scrolls track up) ── */
-  function _renderBeat(idx) {
-    if (idx >= BEATS.length) { SceneManager.showVictory(); return; }
-    const beat = BEATS[idx];
-    const track = document.getElementById("credits-track");
-    const btn   = document.getElementById("story-next-btn");
-    btn.style.display = "none";
+// ═══════════════════════════════════════════════════
+//  TRAIL GLOW OVERLAY
+// ═══════════════════════════════════════════════════
+function drawTrailGlow() {
+    tctx.fillStyle = 'rgba(5,5,5,0.18)';
+    tctx.fillRect(0, 0, width, height);
 
-    /* -- Append new credit line -- */
-    const line = document.createElement("p");
-    line.className = _cls(beat.text);
-    line.textContent = beat.text;
-    line.style.whiteSpace = "pre-line";
-    track.appendChild(line);
+    particles.forEach(p => {
+        const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        if (speed < 0.8) return;
 
-    /* -- Fade in after next paint -- */
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      line.classList.add("vis");
-      AudioSystem.play("story_line");
-    }));
+        const intensity = Math.min(1, speed / 6);
+        const sz = p.size * 3 * intensity;
 
-    /* -- Scroll track upward --
-       Each line is ~52px tall; multi-line beats get extra height.
-       We translate the track so the newest line sits near the
-       lower-third of #credits-viewport. */
-    const lineH = beat.text.includes("\n") ? 110 : 56;
-    trackY += lineH;
-    // Small delay so the text fades in before scrolling
+        const g = tctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sz * 5);
+        g.addColorStop(0,   `rgba(255,200,255,${intensity * 0.9})`);
+        g.addColorStop(0.3, `rgba(220,80,200,${intensity * 0.5})`);
+        g.addColorStop(0.7, `rgba(140,20,210,${intensity * 0.2})`);
+        g.addColorStop(1,   'rgba(0,0,0,0)');
+        tctx.beginPath();
+        tctx.arc(p.x, p.y, sz * 5, 0, Math.PI * 2);
+        tctx.fillStyle = g;
+        tctx.fill();
+
+        tctx.beginPath();
+        tctx.arc(p.x, p.y, sz * 0.4, 0, Math.PI * 2);
+        tctx.fillStyle = `rgba(255,240,255,${intensity * 0.95})`;
+        tctx.fill();
+    });
+
+    const g2 = tctx.createRadialGradient(cursorX, cursorY, 0, cursorX, cursorY, 50);
+    g2.addColorStop(0,   'rgba(255,180,255,0.65)');
+    g2.addColorStop(0.4, 'rgba(200,60,200,0.2)');
+    g2.addColorStop(1,   'rgba(0,0,0,0)');
+    tctx.beginPath();
+    tctx.arc(cursorX, cursorY, 50, 0, Math.PI * 2);
+    tctx.fillStyle = g2;
+    tctx.fill();
+}
+
+// ─── SHAKA IMAGE LOADER ──────────────────────────
+function loadShakaImage() {
+    shakaImg             = new Image();
+    shakaImg.crossOrigin = 'anonymous';
+    shakaImg.src         = '/assets/foto.png';
+    shakaImg.onload      = () => { shakaReady = true; };
+    shakaImg.onerror     = () => {
+        shakaReady = false;
+        console.warn('foto.png tidak ditemukan — shaka mode fallback ke nebula.');
+    };
+}
+
+// ─── STATE MANAGEMENT ────────────────────────────
+const STATE = {
+    currentQuestionIndex: 0,
+    answers: [],
+    questions: [
+        {
+            text: "Di mana kamu paling sering menemukan ketenangan?",
+            options: [
+                "Di kamar sendiri, rebahan tanpa suara",
+                "Di luar rumah, udara bebas dan langit luas",
+                "Di tengah keramaian, tapi pikiran terbang jauh",
+                "Di mana pun, asal ada musik yang pas"
+            ]
+        },
+        {
+            text: "Apa harapan terbesar kamu di ulang tahun ini?",
+            options: [
+                "Lebih tenang, lebih ikhlas, lebih sabar",
+                "Ngejar satu hal yang udah lama tertunda",
+                "Dikelilingi orang-orang yang beneran peduli",
+                "Jalan-jalan ke tempat yang udah lama pengen didatangi"
+            ]
+        },
+        {
+            text: "Kalau bisa tinggal di mana saja di dunia ini, kamu mau di mana?",
+            options: [
+                "Kota yang sepi tapi estetik, ada kafe di tiap sudut",
+                "Desa yang damai, dekat alam dan hamparan hijau",
+                "Pantai, dekat ombak dan sunset tiap hari",
+                "Di bulan. Atau luar angkasa sekalian 🚀"
+            ]
+        },
+        {
+            text: "Hal kecil apa yang paling sering bikin kamu bahagia?",
+            options: [
+                "Mainan sama kucing",
+                "Chat dari seseorang yang lagi kamu pikirin",
+                "Langit yang warnanya keterlaluan bagus",
+                "Playlist yang rasanya dibuat khusus buat mood kamu"
+            ]
+        }
+    ]
+};
+
+const cursor          = document.getElementById('custom-cursor');
+const permissionPopup = document.getElementById('permission-popup');
+const allowBtn        = document.getElementById('allow-camera-btn');
+const videoElement    = document.getElementById('webcam');
+const questionContainer = document.getElementById('question-container');
+const questionText    = document.getElementById('question-text');
+const optionsContainer  = document.getElementById('options-container');
+
+// ─── PERMISSION → OPENING SCENE ──────────────────
+allowBtn.addEventListener('click', () => {
+    permissionPopup.style.display = 'none';
+    startCamera();
+    showOpeningScene();
+});
+
+function showOpeningScene() {
+    const openingScene = document.getElementById('opening-scene');
+    if (!openingScene) { showNextQuestion(); return; }
+    openingScene.classList.remove('hidden');
+
+    function proceed() {
+        openingScene.style.opacity    = '0';
+        openingScene.style.transition = 'opacity 1.2s ease';
+        setTimeout(() => {
+            openingScene.classList.add('hidden');
+            openingScene.style.opacity    = '';
+            openingScene.style.transition = '';
+            showNextQuestion();
+        }, 1200);
+    }
+
+    const startBtn = document.getElementById('opening-start-btn');
+    if (startBtn) startBtn.addEventListener('click', proceed);
     setTimeout(() => {
-      track.style.transform = `translateY(-${trackY}px)`;
-    }, 300);
+        if (!openingScene.classList.contains('hidden')) proceed();
+    }, 15000);
+}
 
-    /* -- After line settles, decide auto or manual -- */
-    if (beat.type === "auto") {
-      const delay = _delay(beat.text);
-      setTimeout(() => { beatIdx=idx+1; _renderBeat(beatIdx); }, delay + 300);
+// ─── QUESTION FLOW ───────────────────────────────
+function showNextQuestion() {
+    if (STATE.currentQuestionIndex >= STATE.questions.length) {
+        finishQuestions();
+        return;
+    }
+    const question = STATE.questions[STATE.currentQuestionIndex];
+    questionContainer.classList.remove('hidden');
+    questionContainer.style.opacity = '0';
 
+    setTimeout(() => {
+        questionText.textContent  = question.text;
+        optionsContainer.innerHTML = '';
+        question.options.forEach((option, index) => {
+            const btn = document.createElement('button');
+            btn.className    = 'option-btn';
+            btn.textContent  = option;
+            btn.dataset.index = index;
+            btn.addEventListener('click', () => selectOption(index));
+            optionsContainer.appendChild(btn);
+        });
+        questionContainer.style.opacity = '1';
+    }, 500);
+}
+
+function selectOption(index) {
+    const btns = document.querySelectorAll('.option-btn');
+    btns[index].classList.add('selected');
+    STATE.answers.push(STATE.questions[STATE.currentQuestionIndex].options[index]);
+
+    setTimeout(() => {
+        questionContainer.style.opacity = '0';
+        setTimeout(() => {
+            STATE.currentQuestionIndex++;
+            showNextQuestion();
+        }, 800);
+    }, 600);
+}
+
+// ─── FEEDBACK MAPPING ────────────────────────────
+const FEEDBACK_MAPPING = {
+    "Di kamar sendiri, rebahan tanpa suara":
+        "ternyata kamu tipe yang butuh 'me time' maksimal ya di kamar ✨",
+    "Di luar rumah, udara bebas dan langit luas":
+        "jiwa petualang kamu emang nggak bisa bohong, sukanya hirup udara bebas 🪐",
+    "Di tengah keramaian, tapi pikiran terbang jauh":
+        "pinter banget ya kamu, tetep tenang di tengah rame padahal pikirannya udah kemana-mana 😂",
+    "Di mana pun, asal ada musik yang pas":
+        "emang bener, playlist yang pas itu obat paling ampuh buat segalanya 🎵",
+    "Lebih tenang, lebih ikhlas, lebih sabar":
+        "semoga tahun ini hati kamu beneran seadem yang kamu mau ya 😭",
+    "Ngejar satu hal yang udah lama tertunda":
+        "aku doain hal yang kamu tunda itu bisa segera kejadian tahun ini ✨",
+    "Dikelilingi orang-orang yang beneran peduli":
+        "semoga kamu selalu nemu orang-orang yang sayang sama kamu tulus apa adanya ✨",
+    "Jalan-jalan ke tempat yang udah lama pengen didatangi":
+        "pokoknya semua list destinasi kamu harus kecentang satu-satu ya! 🚀",
+    "Kota yang sepi tapi estetik, ada kafe di tiap sudut":
+        "kalau nanti beneran tinggal di kota estetik itu, jangan lupa ajak aku ngopi ya 😂",
+    "Desa yang damai, dekat alam dan hamparan hijau":
+        "bayangin kamu bangun tidur langsung liat ijo-ijo, pasti tenang banget hidupnya ✨",
+    "Pantai, dekat ombak dan sunset tiap hari":
+        "hidup di pinggir pantai emang impian banget, tiap sore dapet sunset gratis 🌅",
+    "Di bulan. Atau luar angkasa sekalian 🚀":
+        "kalau jadi pindah ke bulan kabarin ya, siapa tau aku jadi tetangga sebelah 🚀😂",
+    "Mainan sama kucing":
+        "pantesan hatinya lembut, ternyata pawrent sejati ya 🐱",
+    "Chat dari seseorang yang lagi kamu pikirin":
+        "semoga notif dari 'dia' selalu muncul di waktu yang paling pas ✨",
+    "Langit yang warnanya keterlaluan bagus":
+        "semoga setiap hari langitnya selalu kasih warna yang bikin kamu senyum 😭",
+    "Playlist yang rasanya dibuat khusus buat mood kamu":
+        "semoga telinga kamu selalu dimanjain sama lagu-lagu yang ngertiin kamu ✨"
+};
+
+function finishQuestions() {
+    questionContainer.style.opacity = '0';
+    setTimeout(() => {
+        const feedbackParts = STATE.answers.map(ans => FEEDBACK_MAPPING[ans] || ans);
+        const part1 = `${feedbackParts[0]} dan ${feedbackParts[1]}.`;
+        const part2 = `${feedbackParts[2]}, dan ya... ${feedbackParts[3]}.`;
+        questionContainer.innerHTML = `
+            <div class="hologram-card feedback-scene">
+                <div class="feedback-content">
+                    <p class="feedback-text fade-in-up" style="animation-delay:0.5s">${part1}</p>
+                    <p class="feedback-text fade-in-up" style="animation-delay:3s">${part2}</p>
+                    <p class="feedback-text fade-in-up highlight" style="animation-delay:5.5s">
+                        apapun itu, aku cuma pengen kamu bahagia terus meyy... ✨
+                    </p>
+                </div>
+                <button id="next-to-puzzle" class="fade-in" style="animation-delay:8s;margin-top:30px;">Lanjut?</button>
+            </div>`;
+        questionContainer.style.opacity = '1';
+        document.getElementById('next-to-puzzle').addEventListener('click', () => initPuzzleGame());
+    }, 1000);
+}
+
+// ─── PUZZLE GAME ─────────────────────────────────
+const puzzleContainer = document.getElementById('puzzle-container');
+const puzzleBoard     = document.getElementById('puzzle-board');
+const puzzleTutorial  = document.getElementById('puzzle-tutorial');
+const startPuzzleBtn  = document.getElementById('start-puzzle-btn');
+const captureCanvas   = document.getElementById('capture-canvas');
+let puzzlePieces = [];
+
+function initPuzzleGame() {
+    questionContainer.classList.add('hidden');
+    puzzleContainer.classList.remove('hidden');
+    puzzleTutorial.classList.remove('hidden');
+}
+
+startPuzzleBtn.addEventListener('click', () => {
+    puzzleTutorial.classList.add('hidden');
+    captureAndStartPuzzle();
+    camera.start();
+});
+
+function captureAndStartPuzzle() {
+    const pctx = captureCanvas.getContext('2d');
+    captureCanvas.width  = 600;
+    captureCanvas.height = 400;
+    pctx.translate(600, 0);
+    pctx.scale(-1, 1);
+    pctx.drawImage(videoElement, 0, 0, 600, 400);
+    requestAnimationFrame(() => {
+        pctx.drawImage(videoElement, 0, 0, 600, 400);
+    });
+    const imageData = captureCanvas.toDataURL('image/jpeg');
+    createPuzzlePieces(imageData);
+    startTime    = Date.now();
+    isGameActive = true;
+}
+
+function createPuzzlePieces(imageSrc) {
+    puzzleBoard.innerHTML = '';
+    puzzlePieces = [];
+    const rows = 2, cols = 3;
+    const pw = 600/cols, ph = 400/rows;
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const piece = document.createElement('div');
+            piece.className = 'puzzle-piece';
+            piece.style.width  = `${pw}px`;
+            piece.style.height = `${ph}px`;
+            piece.style.backgroundImage    = `url(${imageSrc})`;
+            piece.style.backgroundPosition = `-${c*pw}px -${r*ph}px`;
+            const pObj = {
+                element:  piece,
+                targetX:  c * pw,
+                targetY:  r * ph,
+                currentX: Math.random() * (window.innerWidth  - pw),
+                currentY: Math.random() * (window.innerHeight - ph),
+                id: r*cols + c
+            };
+            updatePiecePosition(pObj);
+            puzzleBoard.appendChild(piece);
+            puzzlePieces.push(pObj);
+        }
+    }
+    scramblePieces();
+}
+
+function updatePiecePosition(p) {
+    p.element.style.left = `${p.currentX}px`;
+    p.element.style.top  = `${p.currentY}px`;
+}
+
+function scramblePieces() {
+    puzzlePieces.forEach(p => {
+        p.currentX = Math.random() * 400;
+        p.currentY = Math.random() * 300;
+        updatePiecePosition(p);
+    });
+}
+
+function checkSnap(piece) {
+    const dx = piece.targetX - piece.currentX;
+    const dy = piece.targetY - piece.currentY;
+    if (Math.sqrt(dx*dx + dy*dy) < 60) {
+        piece.currentX = piece.targetX;
+        piece.currentY = piece.targetY;
+        updatePiecePosition(piece);
+        piece.element.classList.add('correct');
+        piece.locked = true;
+        piece.element.style.zIndex     = '1';
+        piece.element.style.transition = '0.2s ease';
+        piece.element.style.boxShadow  = '0 0 20px rgba(255,182,193,0.8)';
+        setTimeout(() => { piece.element.style.boxShadow = ''; }, 250);
+    }
+}
+
+function checkWin() {
+    const allCorrect = puzzlePieces.every(p => p.element.classList.contains('correct'));
+    if (allCorrect && isGameActive) {
+        isGameActive = false;
+        finishPuzzle();
+    }
+}
+
+function finishPuzzle() {
+    const duration = (Date.now() - startTime) / 1000;
+    const message  = duration < 60 ? "wahh cepet juga kamu 😭✨" : "wkwk lumayan lama juga 😭";
+    setTimeout(() => {
+        puzzleBoard.style.opacity    = '0.5';
+        puzzleBoard.style.transition = 'opacity 2s ease';
+        const feedback = document.createElement('div');
+        feedback.className = 'hologram-card fade-in';
+        feedback.style.cssText = 'position:absolute;z-index:1000;';
+        feedback.innerHTML = `
+            <h2>Puzzle Selesai!</h2>
+            <p style="margin:20px 0">${message}</p>
+            <p style="font-size:0.8rem;opacity:0.6">Waktu: ${duration.toFixed(1)} detik</p>
+            <button id="next-to-story" class="story-btn fade-in">Lanjut...</button>`;
+        puzzleContainer.appendChild(feedback);
+        document.getElementById('next-to-story').addEventListener('click', startStorytelling);
+    }, 1000);
+}
+
+// ─── STORYTELLING ────────────────────────────────
+const storyContainer = document.getElementById('story-container');
+const storyScroll    = document.getElementById('story-scroll');
+const bgMusic        = document.getElementById('bg-music');
+
+const STORY_LINES = [
+    "Hay meysaa...",
+    "HBD YA.. semoga hal-hal baik selalu datang ke kamu, dan",
+    "apa yang kamu usahakan bisa tercapai ...",
+    "aminn",
+    "Ohh iyaa mey...",
+    "Aku juga minta maaf kalau selama ini pernah ada sikap atau...",
+    "kata2ku yang bikin kamu ga nyaman, sengaja maupun ga sengaja",
+    "kado itu bukan punya maksud apapun kok, cuma bentuk ucapan aja",
+    "dan...",
+    "tenang aja, aku udah ngga ngejer kamu lagi, tapii...",
+    "insyaallah :v",
+    "Aku cuma pengen semuanya tetep baik tanpa ada rasa gaenak satu sama lain."
+];
+
+let currentLineIndex = -1;
+let isStoryActive    = false;
+let autoNextTimer    = null;
+let isAutoTyping     = false;
+let canManualNext    = false;
+
+function startStorytelling() {
+    puzzleContainer.classList.add('hidden');
+    storyContainer.classList.remove('hidden');
+    isStoryActive = true;
+    bgMusic.volume = 0.5;
+    bgMusic.play().catch(() => {});
+    nextStoryLine();
+}
+
+function nextStoryLine() {
+    if (!isStoryActive) return;
+    if (autoNextTimer) clearTimeout(autoNextTimer);
+    currentLineIndex++;
+    if (currentLineIndex >= STORY_LINES.length) { finishStory(); return; }
+
+    const lineText = STORY_LINES[currentLineIndex];
+    document.querySelectorAll('.story-line').forEach(l => l.classList.add('scrolled'));
+
+    const lineEl = document.createElement('div');
+    lineEl.className   = 'story-line';
+    lineEl.textContent = lineText;
+    storyScroll.appendChild(lineEl);
+    storyScroll.style.transform = `translateY(-${currentLineIndex * 60}px)`;
+    setTimeout(() => lineEl.classList.add('active'), 100);
+
+    if (lineText.endsWith('...')) {
+        canManualNext = false;
+        isAutoTyping  = true;
+        autoNextTimer = setTimeout(() => {
+            isAutoTyping = false;
+            nextStoryLine();
+        }, 4000);
     } else {
-      // btn or victory — show NEXT after text is readable
-      setTimeout(() => {
-        btn.style.display = "flex";
-        btn.onclick = () => {
-          btn.style.display = "none";
-          beatIdx = idx+1;
-          if (beat.type === "victory") SceneManager.showVictory();
-          else _renderBeat(beatIdx);
-        };
-      }, 900);
+        canManualNext = true;
+        isAutoTyping  = false;
     }
-  }
+}
 
-  return { start };
-})();
-
-
-/* ──────────────────────────────────────────────
-   §8  SCENE MANAGER
-   ────────────────────────────────────────────── */
-const SceneManager = (() => {
-  let cur = "scene-opening";
-
-  function showScene(id) {
-    const p = document.getElementById(cur);
-    const n = document.getElementById(id);
-    if (p) { p.classList.remove("active"); p.style.pointerEvents="none"; }
-    if (n) { n.classList.add("active");    n.style.pointerEvents="all"; }
-    cur = id;
-  }
-
-  function warpTransition(cb) {
-    const ov = document.getElementById("warp-overlay");
-    ParticleSystem.triggerWarp();
-    ov.classList.add("warp-in");
+function finishStory() {
+    isStoryActive = false;
     setTimeout(() => {
-      if (cb) cb();
-      ov.classList.remove("warp-in"); ov.classList.add("warp-out");
-      setTimeout(()=>ov.classList.remove("warp-out"), 600);
-    }, 480);
-  }
+        storyContainer.style.opacity    = '0';
+        storyContainer.style.transition = 'opacity 3s ease';
+        setTimeout(showFinalEnding, 3000);
+    }, 4000);
+}
 
-  function showVictory() {
-    warpTransition(() => {
-      showScene("scene-victory");
-      _confetti(); AudioSystem.play("victory");
+// ─── FINAL ENDING & FREEPLAY ─────────────────────
+const finalEnding      = document.getElementById('final-ending');
+const replayBtn        = document.getElementById('replay-btn');
+const freeplayPopup    = document.getElementById('freeplay-popup');
+const startFreeplayBtn = document.getElementById('start-freeplay-btn');
+
+function showFinalEnding() {
+    storyContainer.classList.add('hidden');
+    finalEnding.classList.remove('hidden');
+    finalEnding.style.opacity = '1';
+    setTimeout(() => {
+        freeplayPopup.classList.remove('hidden');
+        freeplayPopup.classList.add('fade-in');
+    }, 5000);
+}
+
+startFreeplayBtn.addEventListener('click', () => {
+    freeplayPopup.classList.add('hidden');
+    finalEnding.classList.add('hidden');
+    isFreePlay = true;
+
+    const tips = document.getElementById('freeplay-tips');
+    if (tips) {
+        tips.classList.remove('hidden');
+        tips.style.opacity = '1';
+        // Tips selalu standby — tidak disembunyikan
+    }
+
+    loadShakaImage();
+});
+
+// ─── HAND TRACKING / CAMERA ──────────────────────
+let hands, camera;
+
+function startCamera() {
+    hands = new Hands({
+        locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
-  }
-
-  function _confetti() {
-    const c = document.getElementById("confetti-container");
-    const cols = ["#ff6ec7","#a855f7","#22d3ee","#fbbf24","#fff"];
-    for (let i=0;i<70;i++) {
-      const p = document.createElement("div"); p.className="confetti-piece";
-      p.style.left=Math.random()*100+"%";
-      p.style.background=cols[~~(Math.random()*cols.length)];
-      p.style.animationDuration=(Math.random()*2+2)+"s";
-      p.style.animationDelay=(Math.random()*2)+"s";
-      p.style.transform=`rotate(${Math.random()*360}deg)`;
-      c.appendChild(p);
-    }
-  }
-
-  return { showScene, warpTransition, showVictory };
-})();
-
-
-/* ──────────────────────────────────────────────
-   §9  AUDIO SYSTEM — Web Audio API tones
-   ────────────────────────────────────────────── */
-const AudioSystem = (() => {
-  let C=null, amb=false;
-
-  function _ctx() {
-    if (!C) C = new (window.AudioContext||window.webkitAudioContext)();
-    if (C.state==="suspended") C.resume();
-    return C;
-  }
-
-  function play(type) {
-    try {
-      const c=_ctx();
-      if (type==="hover")      _t(c,660,.03,"sine",.04);
-      else if (type==="click") _t(c,880,.07,"sine",.08);
-      else if (type==="select")     _ch(c,[523,659,784],.1);
-      else if (type==="capture")    _t(c,1047,.14,"sine",.22);
-      else if (type==="story_line") _t(c,528,.04,"sine",.18);
-      else if (type==="victory")    _v(c);
-    } catch(_){}
-  }
-
-  function _t(c,f,g,tp,d) {
-    const o=c.createOscillator(), n=c.createGain();
-    o.connect(n); n.connect(c.destination);
-    o.type=tp; o.frequency.setValueAtTime(f,c.currentTime);
-    n.gain.setValueAtTime(g,c.currentTime);
-    n.gain.exponentialRampToValueAtTime(.001,c.currentTime+d);
-    o.start(); o.stop(c.currentTime+d);
-  }
-  function _ch(c,fs,g) { fs.forEach((f,i)=>setTimeout(()=>_t(c,f,g,"sine",.3),i*65)); }
-  function _v(c) { [523,659,784,1047].forEach((f,i)=>setTimeout(()=>_t(c,f,.14,"sine",.4),i*140)); }
-
-  function startAmbient() {
-    if (amb) return; amb=true;
-    try {
-      const c=_ctx(), o=c.createOscillator(), n=c.createGain(), f=c.createBiquadFilter();
-      f.type="lowpass"; f.frequency.value=180;
-      o.connect(f); f.connect(n); n.connect(c.destination);
-      o.type="sawtooth"; o.frequency.value=55; n.gain.value=.024; o.start();
-    } catch(_){}
-  }
-
-  return { play, startAmbient };
-})();
-
-
-/* ──────────────────────────────────────────────
-   §10  APP INIT
-   ────────────────────────────────────────────── */
-(async () => {
-  ParticleSystem.init();
-  UISystem.init();
-
-  const vid = document.getElementById("webcam-video");
-  await HandTracking.init(vid);
-
-  window.startJourney = () => {
-    AudioSystem.startAmbient();
-    SceneManager.warpTransition(() => {
-      SceneManager.showScene("scene-questions");
-      QuestionFlow.start();
+    hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence:  0.7
     });
-  };
+    hands.onResults(onResults);
+    camera = new Camera(videoElement, {
+        onFrame: async () => { await hands.send({ image: videoElement }); },
+        width: 640, height: 480
+    });
+    camera.start();
+}
 
-  /* Dev shortcuts */
-  document.addEventListener("keydown", e => {
-    if (e.key==="Enter") window.startJourney && window.startJourney();
-    if (e.key==="q") {
-      SceneManager.warpTransition(()=>{ SceneManager.showScene("scene-questions"); QuestionFlow.start(); });
-    }
-    if (e.key==="f") {
-      SceneManager.warpTransition(()=>{
-        SceneManager.showScene("scene-feedback");
-        const el=document.getElementById("feedback-text");
-        el.textContent="[test feedback]\n\nokay jadi dari jawaban kamu tadi...\n\nkamu tipe yang tenangnya di bawah langit malam... aesthetic banget sih 🌙✨\n\nsemoga Jepang beneran kejadian ya 🌸\n\ndan rumah di bulan? oke nanti kabarin, siapa tau aku jadi tetangga sebelah 🚀😂\n\nsemoga semuanya baik-baik aja buat kamu ✨";
-        el.style.opacity="1";
-        document.getElementById("btn-feedback-continue").onclick=()=>{
-          SceneManager.warpTransition(()=>{ SceneManager.showScene("scene-puzzle"); CameraSystem.init(); });
-        };
-      });
-    }
-    if (e.key==="p") {
-      SceneManager.warpTransition(()=>{ SceneManager.showScene("scene-puzzle"); CameraSystem.init(); });
-    }
-    if (e.key==="s") FinalStory.start("wahh cepet juga kamu 😭✨");
-    if (e.key==="v") SceneManager.showVictory();
-  });
+const lerp = (s, e, a) => (1-a)*s + a*e;
 
-  console.log("%c🌌 HBD MEYSAA — Space Nebula (final rev)", "color:#ff6ec7;font-size:16px;font-weight:bold;");
-  console.log("%cKeys: Enter=Start · Q=Questions · F=Feedback · P=Puzzle · S=Story · V=Victory", "color:#a855f7");
-})();
+function onResults(results) {
+    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+    const lm = results.multiHandLandmarks[0];
+    targetX = (1 - lm[8].x) * window.innerWidth;
+    targetY = lm[8].y * window.innerHeight;
+    detectGestures(lm);
+}
+
+// ─── GESTURE DETECTION ───────────────────────────
+function detectGestures(lm) {
+    const thumbTip  = lm[4];
+    const indexTip  = lm[8];
+    const middleTip = lm[12];
+    const ringTip   = lm[16];
+    const pinkyTip  = lm[20];
+
+    const indexExt  = indexTip.y  < lm[6].y;
+    const middleExt = middleTip.y < lm[10].y;
+    const ringExt   = ringTip.y   < lm[14].y;
+    const pinkyExt  = pinkyTip.y  < lm[18].y;
+
+    // ── FREEPLAY GESTURES ──
+    if (isFreePlay) {
+        let newEffect = 'none';
+        if      ( indexExt &&  middleExt && !ringExt && !pinkyExt)  newEffect = 'name';
+        else if ( indexExt &&  middleExt &&  ringExt &&  pinkyExt)  newEffect = 'galaxy';
+        else if (!indexExt && !middleExt && !ringExt &&  pinkyExt)  newEffect = 'shaka';
+        else if ( indexExt && !middleExt && !ringExt && !pinkyExt)  newEffect = 'trail';
+        else if (!indexExt && !middleExt && !ringExt && !pinkyExt)  newEffect = 'blackhole';
+
+        if (newEffect !== currentEffect) {
+            currentEffect = newEffect;
+            tctx.clearRect(0, 0, width, height); // selalu clear dulu saat ganti mode
+            if      (currentEffect === 'name')      setModeNameTargets();
+            else if (currentEffect === 'shaka')     setModeShakaTargets();
+            else if (currentEffect === 'blackhole') setModeBlackholeTargets();
+            else if (currentEffect === 'galaxy')    setModeGalaxyTargets();
+            else if (currentEffect === 'trail')     setModeTrailTargets();
+            else                                     setModeNoneTargets();
+        }
+    }
+
+    // ── PINCH ──
+    const pinchDist = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+    if (pinchDist < 0.09) {
+        if (!isPinching) {
+            isPinching = true;
+            cursor.classList.add('clicking');
+            triggerGesture('click');
+        }
+    } else {
+        if (isPinching) {
+            isPinching = false;
+            cursor.classList.remove('clicking');
+        }
+    }
+
+    // ── BACK GESTURE ──
+    const isMiddleCurled = middleTip.y > lm[10].y;
+    const isPointingLeft = indexTip.x  > lm[5].x + 0.1;
+    if (indexExt && isMiddleCurled && isPointingLeft) debounceGesture('back');
+
+    // ── PUZZLE DRAG ──
+    if (isPinching && draggedPiece) {
+        const mx = (targetX - cursorX) * 1.8;
+        const my = (targetY - cursorY) * 1.8;
+        draggedPiece.currentX += mx * 0.2;
+        draggedPiece.currentY += my * 0.2;
+        updatePiecePosition(draggedPiece);
+    } else if (!isPinching && draggedPiece) {
+        checkSnap(draggedPiece);
+        draggedPiece.element.classList.remove('dragging');
+        draggedPiece = null;
+        checkWin();
+    }
+}
+
+function debounceGesture(gesture) {
+    if (lastGesture === gesture) return;
+    if (gestureDebounceTimer) clearTimeout(gestureDebounceTimer);
+    gestureDebounceTimer = setTimeout(() => {
+        triggerGesture(gesture);
+        lastGesture = gesture;
+        setTimeout(() => { lastGesture = null; }, 1000);
+    }, 150);
+}
+
+function triggerGesture(type) {
+    if (isAutoTyping) return;
+    if (type === 'click') {
+        if (isStoryActive && canManualNext) {
+            nextStoryLine();
+            return;
+        }
+        const hovered = document.querySelector(
+            '.option-btn.hovered, #next-to-puzzle.hovered, #start-puzzle-btn.hovered, ' +
+            '#next-to-story.hovered, #start-freeplay-btn.hovered, ' +
+            '#opening-start-btn.hovered'
+        );
+        if (hovered) hovered.click();
+
+        if (isGameActive && !draggedPiece) {
+            const els     = document.elementsFromPoint(cursorX, cursorY);
+            const pieceEl = els.find(el => el.classList.contains('puzzle-piece'));
+            if (pieceEl) {
+                draggedPiece = puzzlePieces.find(p => p.element === pieceEl);
+                if (draggedPiece && draggedPiece.locked) { draggedPiece = null; return; }
+                if (draggedPiece) draggedPiece.element.classList.add('dragging');
+            }
+        }
+    }
+    if (type === 'back') {
+        cursor.style.boxShadow = '0 0 30px rgba(255,255,255,0.8)';
+        setTimeout(() => { cursor.style.boxShadow = '0 0 15px rgba(255,105,180,0.8)'; }, 500);
+    }
+}
+
+// ─── CURSOR UPDATE LOOP ──────────────────────────
+function updateCursor() {
+    cursorX = lerp(cursorX, targetX, 0.15);
+    cursorY = lerp(cursorY, targetY, 0.15);
+    cursor.style.left = `${cursorX}px`;
+    cursor.style.top  = `${cursorY}px`;
+
+    const els = document.elementsFromPoint(cursorX, cursorY);
+    const hit = els.find(el =>
+        el.classList.contains('option-btn') ||
+        el.id === 'next-to-puzzle'    ||
+        el.id === 'start-puzzle-btn'  ||
+        el.id === 'next-to-story'     ||
+        el.id === 'opening-start-btn' ||
+        el.classList.contains('puzzle-piece')
+    );
+    document.querySelectorAll(
+        '.option-btn, #next-to-puzzle, #start-puzzle-btn, #next-to-story, ' +
+        '#start-freeplay-btn, #opening-start-btn'
+    ).forEach(btn => btn.classList.toggle('hovered', btn === hit));
+
+    requestAnimationFrame(updateCursor);
+}
+
+updateCursor();
+
+function showTipsPopup() {
+    const overlay = document.getElementById('tips-overlay');
+    if (!overlay) { console.error("tips-overlay ga ketemu"); return; }
+    overlay.classList.remove('hidden');
+    setTimeout(() => { overlay.classList.add('show'); }, 50);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById('tips-ok-btn');
+    if (btn) {
+        btn.addEventListener('click', () => {
+            const overlay = document.getElementById('tips-overlay');
+            overlay.classList.remove('show');
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                initQuestion();
+            }, 400);
+        });
+    }
+});

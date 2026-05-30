@@ -1,0 +1,744 @@
+ada refisi lagi..PROJECT RULES:
+
+JANGAN remake project dari awal.
+JANGAN ubah struktur utama.
+Tetap gunakan:
+
+* index.html
+* style.css
+* script.js
+
+Semua revisi harus:
+
+* melanjutkan sistem yang sudah ada
+* mempertahankan hand tracking
+* mempertahankan cinematic nebula theme
+* mempertahankan performance ringan
+* mempertahankan smooth transition
+
+Fokus utama:
+
+* emotional experience
+* immersive interaction
+* cinematic feeling
+* lightweight performance
+
+
+SATU(REFISI KE 1)
+oh iya setiap ada nama full(Meisya Qeena Rusmiyanto) ganti dengan (Meisya Qeena Sheehan Rusmiyanto).
+trus, sebelum masuk ke inti hbd, kan itu butuh akses kamera, disini muncul dulu kan perizinan di bawah nya ada tulisan intinya meyakinkan kalau web ini bukan direkam atau disimpan. isi gini aja..
+"Sebelum mulai... website ini butuh akses kamera buat hand tracking meyy.
+tenang aja, ga ada yang aku rekam atau apalagi ku simpen.."
+trus ada klik izinkan kamera" baru masuk ke visual pertama yang tadi udah kita buat..
+BERIKAN JUGA TIAP APAPUN FITUR KEMABLI (PREVOUS) DENGAN TANGAN MEMBENTUK (👈) UNTUK KEMBALI.
+
+DUA(REFISI KE 2)
+dan refisi juga bagian question flow.
+Tetap gunakan:
+
+HTML
+CSS
+JavaScript
+sistem question flow yang sudah ada
+hand tracking gesture
+tema cinematic nebula
+
+JANGAN ubah sistem utama.
+Hanya revisi isi pertanyaan, pilihan jawaban, dan feedback combo agar lebih personal, warm, playful, dan nyambung.
+
+Gunakan EXACT pertanyaan berikut:
+
+QUESTION 1:
+"Di mana kamu paling sering menemukan ketenangan?"
+
+Pilihan:
+
+"Di kamar sendiri, rebahan tanpa suara"
+"Di luar rumah, udara bebas dan langit luas"
+"Di tengah keramaian, tapi pikiran terbang jauh"
+"Di mana pun, asal ada musik yang pas"
+
+====================================================
+
+QUESTION 2:
+"Apa harapan terbesar kamu di ulang tahun ini?"
+
+Pilihan:
+
+"Lebih tenang, lebih ikhlas, lebih sabar"
+"Ngejar satu hal yang udah lama tertunda"
+"Dikelilingi orang-orang yang beneran peduli"
+"Jalan-jalan ke tempat yang udah lama pengen didatangi"
+
+====================================================
+
+QUESTION 3:
+"Kalau bisa tinggal di mana saja di dunia ini, kamu mau di mana?"
+
+Pilihan:
+
+"Kota yang sepi tapi estetik, ada kafe di tiap sudut"
+"Desa yang damai, dekat alam dan hamparan hijau"
+"Pantai, dekat ombak dan sunset tiap hari"
+"Di bulan. Atau luar angkasa sekalian 🚀"
+
+====================================================
+
+QUESTION 4:
+"Hal kecil apa yang paling sering bikin kamu bahagia?"
+
+Pilihan:
+
+"Mainan sama kucing"
+"Chat dari seseorang yang lagi kamu pikirin"
+"Langit yang warnanya keterlaluan bagus"
+"Playlist yang rasanya dibuat khusus buat mood kamu"
+
+Gunakan JSON / JavaScript object untuk menyimpan:
+
+pertanyaan
+pilihan jawaban
+key jawaban
+feedback tiap jawaban
+
+Semua jawaban user harus disimpan ke STATE.answers.
+
+Setelah semua pertanyaan selesai:
+gabungkan seluruh jawaban menjadi SATU feedback combo cinematic.
+
+PENTING:
+
+feedback harus dinamis
+semua opsi jawaban harus punya respon masing-masing
+feedback harus nyambung antar jawaban
+feedback harus terasa personal
+
+Style feedback:
+
+hangat
+playful
+sedikit menggombal
+bercanda ringan
+tidak terlalu bucin/cringe
+cinematic dan emotional
+
+Tambahkan emoji/stiker bercanda ringan seperti:
+✨
+🚀😂
+😭
+🪐
+
+
+
+Contoh hasil feedback combo:
+
+"semoga semua tempat yang pengen kamu datengin nanti beneran bisa kamu lihat satu-satu ✨
+dan kalau jadi bikin rumah di bulan kabarin ya, siapa tau aku jadi tetangga sebelah 🚀😂
+semoga juga hal-hal kecil yang bikin kamu tenang tetap selalu ada buat kamu...
+termasuk kucing random yang tiba-tiba nyamper terus tidur di deket kamu 😭"
+
+Tetap gunakan:
+
+cinematic transition
+fade animation
+floating hologram UI
+pink nebula aesthetic
+smooth scene movement
+minimal particle
+
+Saat user memilih jawaban:
+
+tombol glow sebentar
+transition smooth
+lanjut ke pertanyaan berikutnya
+
+Prioritaskan:
+
+emotional storytelling
+smooth interaction
+immersive feeling
+
+dibanding visual berat atau animasi berlebihan.
+
+TIGA(REFISI KE 3)
+REFISI BAGIAN GAME & CONTROL PUZZLE
+
+Tolong revisi bagian GAME dan CONTROL SYSTEM pada project website ulang tahun interaktif ini.
+
+Tetap gunakan:
+
+* hand tracking
+* webcam control
+* gesture interaction
+* cinematic nebula style
+
+JANGAN remake dari awal.
+Hanya revisi flow sebelum game, sistem kontrol, dan mekanik puzzle agar lebih natural dan mudah dimainkan.
+
+====================================================
+REFISI SEBELUM GAME DIMULAI
+===========================
+
+Sebelum puzzle dimulai:
+buat scene calibration / preparation terlebih dahulu.
+
+User jangan langsung masuk game.
+
+Tampilkan popup / hologram panel seperti:
+
+"Posisiin muka dulu yaa 😭✨"
+
+dan:
+
+"Tenang, gampang kok mainnya"
+
+====================================================
+TUTORIAL INTERAKSI
+==================
+
+Sebelum game dimulai:
+buat tutorial gesture singkat dan visual.
+
+Jelaskan gesture berikut:
+
+1.
+
+Gesture standby cursor:
+🤏
+
+Artinya:
+
+* cursor bergerak mengikuti tangan
+* belum klik
+* belum drag
+
+2.
+
+Gesture click / hold:
+👌
+
+Artinya:
+
+* pinch jempol + telunjuk
+* dianggap klik / menahan object
+
+====================================================
+ALUR SEBELUM GAME
+=================
+
+Flow yang diinginkan:
+
+1.
+
+Popup calibration muncul
+
+2.
+
+User menyesuaikan posisi wajah
+
+3.
+
+Tutorial gesture muncul
+
+4.
+
+User mencoba gerakkan cursor
+
+5.
+
+Baru masuk puzzle game
+
+====================================================
+REFISI CONTROL PUZZLE
+=====================
+
+Masalah saat ini:
+Pergerakan puzzle terlalu kaku.
+
+Puzzle sekarang:
+
+* harus geser urut
+* tidak bisa lompat bebas
+* terasa seperti sliding puzzle
+
+INI HARUS DIREVISI.
+
+====================================================
+YANG DIINGINKAN
+===============
+
+Puzzle harus menjadi:
+FREE DRAG PUZZLE
+
+Artinya:
+
+* piece bisa dipindah bebas
+* bisa langsung dari pinggir ke tengah
+* tidak harus urutan
+* lebih fleksibel
+* lebih natural
+
+====================================================
+SISTEM DRAG PUZZLE
+==================
+
+Gunakan gesture:
+
+🤏
+= standby cursor
+
+👌
+= klik / tahan / drag
+
+Flow:
+
+* saat cursor diarahkan ke piece puzzle
+* lalu user gesture 👌
+* piece langsung bisa diseret mengikuti tangan
+
+Saat gesture dilepas:
+
+* piece berhenti di posisi terakhir
+
+====================================================
+PUZZLE FEEL
+===========
+
+Puzzle harus terasa:
+
+* ringan
+* fun
+* santai
+* tidak bikin frustrasi
+
+Karena tujuan game:
+bukan challenge hardcore,
+tapi bagian fun dari pengalaman ulang tahun.
+
+====================================================
+VISUAL PUZZLE
+=============
+
+Tetap gunakan:
+
+* 6 puzzle pieces
+* tanpa jarak antar piece
+* gunakan garis tipis samar sebagai pembatas
+* hasil akhir terlihat seperti satu foto utuh
+
+Tambahkan:
+
+* glow tipis saat piece dipilih
+* smooth movement saat drag
+* sedikit efek hologram saat berhasil dipasang
+
+====================================================
+IMPORTANT
+=========
+
+Prioritaskan:
+
+* kenyamanan kontrol
+* gesture yang natural
+* smooth interaction
+* cinematic experience
+
+dibanding mekanik game yang rumit.
+
+EMPAT(refisi ke 4)
+```txt id="a1b2c3"
+REFISI BAGIAN STORYTELLING FINAL
+
+Bagian storytelling sekarang sudah bagus.
+Auto next setelah teks "..." sudah smooth dan cinematic.
+
+Tetapi masih ada masalah saat tombol NEXT (panah bawah) muncul.
+
+Masalah:
+Saat tombol next muncul,
+flow storytelling terasa "kaget" dan kurang smooth.
+
+====================================================
+REFISI INTERAKSI NEXT
+====================================================
+
+HAPUS tombol panah bawah / tombol NEXT besar.
+
+Sebagai gantinya:
+gunakan text tips samar kecil seperti:
+
+"klik dimana saja untuk lanjut"
+
+Style:
+- opacity rendah
+- glow tipis
+- cinematic
+- minimalis
+- tidak terlalu mencolok
+
+====================================================
+SISTEM INTERAKSI
+====================================================
+
+Saat user melakukan gesture:
+👌
+
+maka dianggap:
+tap / lanjut ke bait berikutnya.
+
+User bisa klik area mana saja di layar untuk lanjut,
+tidak perlu fokus ke tombol tertentu.
+
+Tujuannya:
+agar storytelling terasa lebih natural,
+immersive,
+dan cinematic seperti film.
+
+====================================================
+TRANSITION FEEL
+====================================================
+
+Pastikan:
+- perpindahan bait tetap smooth
+- text sebelumnya tetap naik perlahan ke atas
+- tidak ada perubahan mendadak
+- pacing tetap pelan dan emotional
+
+====================================================
+REFISI BAGIAN STORYTELLING AUDIO
+====================================================
+
+Tambahkan backsound piano ambience lembut pada bagian storytelling ending.
+
+Style musik:
+- soft piano
+- emotional
+- calm
+- cinematic
+- volume lembut
+- looping halus
+
+Gunakan struktur folder seperti berikut untuk audio storytelling:
+
+nebula-web/
+│
+├── index.html
+├── style.css
+├── script.js
+│
+├── assets/
+│ └── audiopiano.mp3
+
+Pastikan file audio:
+"audiopiano.mp3"
+
+diambil dari path:
+
+/assets/audiopiano.mp3
+
+Gunakan file lokal tersebut sebagai backsound storytelling ending.
+
+Lalu hubungkan audio tersebut ke storytelling scene.
+
+Musik mulai diputar saat storytelling dimulai,
+dan fade out perlahan saat ending selesai.
+
+Tambahkan juga:
+- smooth audio transition
+- autoplay setelah interaksi pertama user
+- jangan terlalu keras agar tetap fokus ke storytelling
+```
+```txt id="a1b2c3"
+REFISI BAGIAN STORYTELLING FINAL
+
+Bagian storytelling sekarang sudah bagus.
+Auto next setelah teks "..." sudah smooth dan cinematic.
+
+Tetapi masih ada masalah saat tombol NEXT (panah bawah) muncul.
+
+Masalah:
+Saat tombol next muncul,
+flow storytelling terasa "kaget" dan kurang smooth.
+
+====================================================
+REFISI INTERAKSI NEXT
+====================================================
+
+HAPUS tombol panah bawah / tombol NEXT besar.
+
+Sebagai gantinya:
+gunakan text tips samar kecil seperti:
+
+"klik dimana saja untuk lanjut"
+
+Style:
+- opacity rendah
+- glow tipis
+- cinematic
+- minimalis
+- tidak terlalu mencolok
+
+====================================================
+SISTEM INTERAKSI
+====================================================
+
+Saat user melakukan gesture:
+👌
+
+maka dianggap:
+tap / lanjut ke bait berikutnya.
+
+User bisa klik area mana saja di layar untuk lanjut,
+tidak perlu fokus ke tombol tertentu.
+
+Tujuannya:
+agar storytelling terasa lebih natural,
+immersive,
+dan cinematic seperti film.
+
+====================================================
+TRANSITION FEEL
+====================================================
+
+Pastikan:
+- perpindahan bait tetap smooth
+- text sebelumnya tetap naik perlahan ke atas
+- tidak ada perubahan mendadak
+- pacing tetap pelan dan emotional
+
+====================================================
+REFISI BAGIAN STORYTELLING AUDIO
+====================================================
+
+Tambahkan backsound piano ambience lembut pada bagian storytelling ending.
+
+Style musik:
+- soft piano
+- emotional
+- calm
+- cinematic
+- volume lembut
+- looping halus
+
+Gunakan FILE LOKAL, bukan URL online.
+
+Buat struktur folder seperti:
+
+/assets/music/piano.mp3
+
+Lalu hubungkan audio tersebut ke storytelling scene.
+
+Musik mulai diputar saat storytelling dimulai,
+dan fade out perlahan saat ending selesai.
+
+Tambahkan juga:
+- smooth audio transition
+- autoplay setelah interaksi pertama user
+- jangan terlalu keras agar tetap fokus ke storytelling
+```
+REFISI ENDING STORYTELLING juga
+
+Pada bagian storytelling terakhir,
+hapus text:
+
+"Once again...DST"
+
+dari bait storytelling sebelumnya.
+
+Jadi bait terakhir storytelling menjadi:
+
+"Aku cuma pengen semuanya tetep baik tanpa ada rasa gaenak satu sama lain..."
+
+SETELAH itu,
+baru transition masuk ke VISUAL ENDING FINAL.
+
+Setelah storytelling selesai:
+buat transition cinematic menuju visual ending akhir.
+
+Visual:
+
+* nebula pink lembut
+* bintang bergerak pelan
+* glow particles tipis
+* cinematic fade
+
+Lalu tampilkan text besar di tengah:
+
+"ONCE AGAIN, HBD YAA!!"
+di bawahnya:
+"Meisya Qeena Sheehan Rusmiyanto"
+lalu lanjut text kecil:
+"jaga diri baek-baek,
+semoga semua yang kamu usahakan terwujud,
+TERIMAKASII.."
+Tambahkan:
+* fade in smooth
+* glow lembut
+* cinematic emotional feel
+* backsound piano tetap berjalan pelan
+Setelah beberapa detik,
+baru tampilkan tombol:
+"Replay"
+dengan style minimalis hologram.
+
+
+LIMA
+REFISI FINAL SCENE — FREE PLAY NEBULA MODE
+
+Setelah visual ending selesai,
+munculkan popup cinematic kecil:
+
+"Masih gabut? 😭✨
+nih yuk mainan nebula bentar..."
+Gunakan:
+* fade in smooth
+* glow pink lembut
+* floating hologram style
+* ambience tetap calm dan cinematic
+====================================================
+FREE PLAY NEBULA MODE
+=====================
+
+Setelah popup hilang:
+masuk ke mode free interaction nebula.
+Background nebula sebelumnya berubah menjadi:
+interactive particle nebula scene.
+Tambahkan text tips samar kecil di atas:
+"coba deh tangan kamu gini ✊☝️🫰✌️🖐️"
+Style tips:
+
+* opacity rendah
+* glow tipis
+* cinematic
+* minimalis
+* floating smooth
+Di bawah text tips tersebut:
+baru tampil visual nebula interaction.
+
+====================================================
+GESTURE VISUAL SYSTEM
+=====================
+Gunakan transition yang SANGAT smooth antar visual.
+Jangan ada perpindahan kasar atau tiba-tiba.
+
+====================================================
+GESTURE ✌️
+==========
+
+Saat tangan bentuk:
+✌️
+Nebula berkumpul membentuk tulisan:
+"Meisya Qeena Sheehan Rusmiyanto"
+Style:
+* elegant
+* glowing pink-white
+* minimalis
+* cinematic
+* particle lembut
+* jangan terlalu ramai agar tetap ringan
+
+====================================================
+GESTURE 🖐️
+===========
+
+Saat tangan terbuka:
+🖐️
+Nebula berubah menjadi:
+visual galaxy bima sakti cinematic.
+
+Gunakan:
+
+* nebula swirl
+* slow zoom in/out
+* floating stars
+* depth illusion
+Pilih visual yang paling smooth dan aesthetic,
+bukan realistis berat.
+
+====================================================
+GESTURE 🫰
+==========
+
+Saat tangan:
+🫰
+Nebula berkumpul membentuk:
+siluet foto dari asset (ini fotonya sudah  aku kirim):
+
+/assets/foto.png
+
+Style visual:
+* pink + white stylized particle
+* cinematic silhouette
+* glow lembut
+* aesthetic
+* low detail agar tetap ringan
+Jangan gunakan full realistic rendering.
+
+====================================================
+GESTURE ☝️
+==========
+
+Saat tangan:
+☝️
+Aktifkan:
+STAR TRAIL MODE
+
+Jari user meninggalkan:
+* trail cahaya bintang
+* comet effect
+* sparkle neon
+* smooth glowing line
+Visual terasa seperti:
+menggambar di luar angkasa.
+
+====================================================
+GESTURE ✊
+=========
+
+Saat tangan:
+✊
+Aktifkan:
+BLACK HOLE EFFECT
+
+Visual:
+* semua particle tertarik ke tengah
+* vortex swirl
+* layar sedikit menggelap
+* nebula tersedot perlahan
+Saat gesture dilepas:
+particle menyebar kembali dengan smooth.
+
+====================================================
+IMPORTANT
+=========
+
+Prioritaskan:
+* smooth transition
+* cinematic interaction
+* emotional aesthetic
+* lightweight performance
+dibanding efek berat berlebihan.
+Particle harus tetap ringan dan stabil di browser desktop maupun mobile.
+
+OPTIMIZATION RULES:
+Prioritaskan:
+* smooth FPS
+* lightweight rendering
+* minimal CPU usage
+* stable browser performance
+
+Gunakan:
+* requestAnimationFrame
+* particle pooling
+* low particle count
+* smooth easing animation
+
+Hindari:
+* shader berat
+* particle berlebihan
+* physics kompleks
+* render 3D berat
+
+Target:
+tetap smooth di laptop biasa dan HP modern.
+

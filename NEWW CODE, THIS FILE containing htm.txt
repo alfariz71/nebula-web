@@ -1,0 +1,1648 @@
+NEWW CODE, THIS FILE containing html,css,jd
+
+INDEX.HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nebula Birthday</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- MediaPipe Hands CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+</head>
+<body>
+    <canvas id="nebulaCanvas"></canvas>
+    
+    <div id="custom-cursor"></div>
+
+    <div id="permission-popup" class="popup-overlay">
+        <div class="popup-content">
+            <p>Sebelum mulai...<br>website ini butuh akses kamera buat hand tracking meyy.</p>
+            <p>tenang aja,<br>ga ada yang aku rekam atau apalagi ku simpen..</p>
+            <button id="allow-camera-btn">Izinkan Kamera</button>
+        </div>
+    </div>
+
+    <video id="webcam" autoplay playsinline style="display:none;"></video>
+
+    <!-- OPENING SCENE — muncul setelah permission, sebelum questions -->
+    <div id="opening-scene" class="hidden">
+        <div class="opening-content">
+            <p class="opening-label">A MESSAGE FROM THE UNIVERSE</p>
+            <h1 class="opening-name">MEYSAA</h1>
+            <p class="opening-fullname">Meisya Qeena Sheehan Rusmiyanto</p>
+            <p class="opening-barakallah">Barakallah Fi Umrik</p>
+            <button id="opening-start-btn">Mulai →</button>
+        </div>
+    </div>
+
+    <div id="question-container" class="hidden">
+        <div id="question-card" class="hologram-card">
+            <h2 id="question-text"></h2>
+            <div id="options-container"></div>
+        </div>
+    </div>
+
+    <div id="puzzle-container" class="hidden">
+        <div id="puzzle-board"></div>
+        <div id="puzzle-tutorial" class="hologram-card hidden">
+            <p>Posisiin muka dulu yaa 😭✨</p>
+            <p>Tenang, gampang kok mainnya</p>
+            <div class="tutorial-gestures">
+                <span>🤏 = move cursor</span>
+                <span>👌 = drag piece</span>
+            </div>
+            <button id="start-puzzle-btn">Siap!</button>
+        </div>
+    </div>
+
+    <canvas id="capture-canvas" style="display:none;"></canvas>
+
+    <div id="story-container" class="hidden">
+        <div id="story-scroll"></div>
+        <div id="story-hint" class="fade-in">klik dimana saja untuk lanjut</div>
+    </div>
+
+    <div id="final-ending" class="hidden">
+        <div class="ending-content">
+            <h1 class="hbd-text">ONCE AGAIN, HBD YAA!!</h1>
+            <h2 class="name-text">Meisya Qeena Sheehan Rusmiyanto</h2>
+            <p class="final-wish">
+                jaga diri baek-baek,<br>
+                semoga semua yang kamu usahakan terwujud,<br>
+                TERIMAKASII..
+            </p>
+            <button id="replay-btn" class="hidden">Replay</button>
+        </div>
+    </div>
+
+    <div id="freeplay-popup" class="hologram-card hidden">
+        <p>Masih gabut? 😭✨<br>nih yuk mainan nebula bentar...</p>
+        <button id="start-freeplay-btn">Ayo!</button>
+    </div>
+
+    <audio id="bg-music" loop>
+        <source src="assets/audiopiano.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
+SCRIPT.JS
+// ═══════════════════════════════════════════════════
+//  NEBULA BIRTHDAY — script.js
+//  Fixed: currentEffect hoisting, name particle system
+// ═══════════════════════════════════════════════════
+
+// ─── NEBULA CANVAS ───────────────────────────────
+let isFreePlay = false;
+const canvas = document.getElementById('nebulaCanvas');
+const ctx = canvas.getContext('2d');
+let width, height;
+let particles = [];
+
+// ─── ALL STATE VARS UP TOP (fixes hoisting errors) ──
+let currentEffect = 'none';          // must be declared BEFORE detectGestures
+let isPinching    = false;
+let lastGesture   = null;
+let gestureDebounceTimer = null;
+let cursorX = 0, cursorY = 0;
+let targetX = 0, targetY = 0;
+let draggedPiece  = null;
+let isGameActive  = false;
+let startTime;
+
+// ─── NAME PARTICLE STATE ─────────────────────────
+let nameParticles       = [];
+let nameParticlesReady  = false;
+let nameTransitionStart = 0;
+const NAME_TEXT = "Meisya Qeena Sheehan Rusmiyanto";
+
+// ─── TRAIL STATE ─────────────────────────────────
+const trailCanvas = document.createElement('canvas');
+trailCanvas.style.cssText = `
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:2;`;
+document.body.appendChild(trailCanvas);
+const tctx = trailCanvas.getContext('2d');
+let trailPoints = [];
+
+function resize() {
+    width  = canvas.width  = trailCanvas.width  = window.innerWidth;
+    height = canvas.height = trailCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── PARTICLE CLASS ──────────────────────────────
+class Particle {
+    constructor() { this.reset(); }
+
+    reset() {
+        this.x       = Math.random() * width;
+        this.y       = Math.random() * height;
+        this.size    = Math.random() * 2 + 0.5;
+        this.speedX  = (Math.random() - 0.5) * 0.5;
+        this.speedY  = (Math.random() - 0.5) * 0.5;
+        this.alpha   = Math.random() * 0.5 + 0.2;
+        this.color   = `rgba(255,${150 + Math.random()*105},${200 + Math.random()*55},${this.alpha})`;
+    }
+
+    update() {
+        if (isFreePlay) {
+            if (currentEffect === 'blackhole') {
+                const dx = cursorX - this.x;
+                const dy = cursorY - this.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 400) {
+                    this.x += dx * 0.05;
+                    this.y += dy * 0.05;
+                }
+            } else if (currentEffect === 'trail') {
+                const dx = cursorX - this.x;
+                const dy = cursorY - this.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 150) {
+                    this.speedX = (Math.random() - 0.5) * 8;
+                    this.speedY = (Math.random() - 0.5) * 8;
+                }
+            } else if (currentEffect === 'galaxy') {
+                const angle = 0.02;
+                const cos = Math.cos(angle), sin = Math.sin(angle);
+                const dx = this.x - width/2, dy = this.y - height/2;
+                this.x = width/2 + (dx*cos - dy*sin);
+                this.y = height/2 + (dx*sin + dy*cos);
+            } else if (currentEffect === 'name') {
+                // particles drift slowly toward center while name particles form
+                const dx = width/2  - this.x;
+                const dy = height/2 - this.y;
+                this.x += dx * 0.003;
+                this.y += dy * 0.003;
+            }
+        }
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.x < 0 || this.x > width || this.y < 0 || this.y > height) this.reset();
+    }
+
+    draw() {
+        ctx.shadowBlur  = 10;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
+
+function initParticles() {
+    particles = [];
+    const count = Math.floor((width * height) / 10000);
+    for (let i = 0; i < count; i++) particles.push(new Particle());
+}
+
+// ─── MAIN ANIMATE LOOP ───────────────────────────
+function animate() {
+    ctx.fillStyle = 'rgba(5,5,5,0.2)';
+    ctx.fillRect(0, 0, width, height);
+
+    // Background star twinkle
+    ctx.fillStyle = 'white';
+    for (let i = 0; i < 20; i++) {
+        ctx.beginPath();
+        ctx.arc(Math.random()*width, Math.random()*height, Math.random()*1.5, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    particles.forEach(p => { p.update(); p.draw(); });
+
+    // Trail canvas clear (trail draws on separate canvas)
+    if (currentEffect !== 'trail' && currentEffect !== 'blackhole') {
+        tctx.clearRect(0, 0, width, height);
+    }
+
+    requestAnimationFrame(animate);
+}
+
+initParticles();
+animate();
+
+// ═══════════════════════════════════════════════════
+//  NAME PARTICLE SYSTEM
+//  Bintang nebula berkumpul membentuk teks dalam 3 detik
+// ═══════════════════════════════════════════════════
+function buildNameParticles() {
+    nameParticles      = [];
+    nameParticlesReady = false;
+    nameTransitionStart = performance.now();
+
+    const W = width, H = height;
+    const offscreen = document.createElement('canvas');
+    offscreen.width  = W;
+    offscreen.height = 180;
+    const octx = offscreen.getContext('2d');
+
+    // Auto-scale font agar tidak terpotong
+    let fontSize = Math.floor(W / 14);
+    octx.font = `300 ${fontSize}px 'Segoe UI', Arial, sans-serif`;
+    let tw = octx.measureText(NAME_TEXT).width;
+    while (tw > W * 0.86 && fontSize > 12) {
+        fontSize--;
+        octx.font = `300 ${fontSize}px 'Segoe UI', Arial, sans-serif`;
+        tw = octx.measureText(NAME_TEXT).width;
+    }
+
+    octx.fillStyle      = '#fff';
+    octx.textAlign      = 'center';
+    octx.textBaseline   = 'middle';
+    octx.fillText(NAME_TEXT, W / 2, 90);
+
+    const imgData = octx.getImageData(0, 0, W, 180).data;
+    const targetCY = H / 2;
+
+    for (let py = 0; py < 180; py += 3) {
+        for (let px = 0; px < W; px += 3) {
+            if (imgData[(py * W + px) * 4 + 3] > 100) {
+                // Core particle tepat di titik huruf
+                nameParticles.push(_makeNameParticle(px, targetCY - 90 + py, W, H, 'core'));
+
+                // Extra sparkle di sekitar huruf (~35% chance)
+                if (Math.random() < 0.35) {
+                    const a = Math.random() * Math.PI * 2;
+                    const r = Math.random() * 9;
+                    nameParticles.push(_makeNameParticle(
+                        px + Math.cos(a)*r,
+                        targetCY - 90 + py + Math.sin(a)*r,
+                        W, H, 'sparkle'
+                    ));
+                }
+            }
+        }
+    }
+
+    nameParticlesReady = true;
+}
+
+function _makeNameParticle(tx, ty, W, H, type) {
+    // Spawn dari posisi nebula acak di seluruh layar
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.min(W, H) * (0.25 + Math.random() * 0.75);
+    return {
+        x:  W/2 + Math.cos(a) * r,
+        y:  H/2 + Math.sin(a) * r,
+        tx, ty,
+        delay:         Math.random() * 1200,   // max 1.2s stagger
+        size:          type === 'sparkle' ? Math.random()*1.2+0.4 : Math.random()*1.8+0.8,
+        hue:           295 + Math.random() * 65,  // magenta → pink
+        sat:           70  + Math.random() * 30,
+        lit:           70  + Math.random() * 25,
+        alpha:         0,
+        isSparkle:     type === 'sparkle',
+        twinkleOffset: Math.random() * Math.PI * 2,
+    };
+}
+
+function drawNameParticles() {
+    if (!nameParticlesReady) return;
+    const now      = performance.now();
+    const DURATION = 3000;
+    const elapsed  = now - nameTransitionStart;
+
+    nameParticles.forEach(p => {
+        // Per-particle progress 0→1
+        const raw  = Math.max(0, Math.min(1, (elapsed - p.delay) / DURATION));
+        const ease = 1 - Math.pow(1 - raw, 3);   // ease-out cubic
+
+        // Lerp toward target
+        p.x += (p.tx - p.x) * ease * 0.1;
+        p.y += (p.ty - p.y) * ease * 0.1;
+
+        p.alpha = Math.min(1, ease * 1.5);
+
+        // Twinkle setelah hampir sampai
+        const twinkle = raw > 0.75
+            ? 0.72 + Math.sin(now * 0.005 + p.twinkleOffset) * 0.28
+            : 1;
+
+        ctx.save();
+        ctx.globalAlpha = p.alpha * twinkle;
+
+        if (p.isSparkle) {
+            // Bintang silang kecil
+            const sz = p.size * (0.8 + twinkle * 0.5);
+            ctx.strokeStyle = `hsl(${p.hue},${p.sat}%,${p.lit}%)`;
+            ctx.lineWidth   = 0.9;
+            ctx.shadowBlur  = 7;
+            ctx.shadowColor = `hsl(${p.hue},100%,82%)`;
+            ctx.beginPath();
+            ctx.moveTo(p.x - sz*2.2, p.y); ctx.lineTo(p.x + sz*2.2, p.y);
+            ctx.moveTo(p.x, p.y - sz*2.2); ctx.lineTo(p.x, p.y + sz*2.2);
+            ctx.stroke();
+        } else {
+            // Titik glowing
+            ctx.shadowBlur  = 9;
+            ctx.shadowColor = `hsl(${p.hue},100%,82%)`;
+            ctx.fillStyle   = `hsl(${p.hue},${p.sat}%,${p.lit}%)`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+            ctx.fill();
+        }
+        ctx.restore();
+    });
+}
+
+// ─── TRAIL DRAW ──────────────────────────────────
+function drawTrail() {
+    tctx.fillStyle = 'rgba(5,5,5,0.18)';
+    tctx.fillRect(0, 0, width, height);
+
+    trailPoints = trailPoints.filter(p => p.age < p.life);
+    trailPoints.forEach(p => {
+        const a = 1 - p.age / p.life;
+        if (p.type === 'main') {
+            const g = tctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 4);
+            g.addColorStop(0, `rgba(255,200,255,${a*0.95})`);
+            g.addColorStop(0.5, `rgba(255,100,199,${a*0.6})`);
+            g.addColorStop(1, `rgba(160,80,240,0)`);
+            tctx.beginPath();
+            tctx.arc(p.x, p.y, p.size*4, 0, Math.PI*2);
+            tctx.fillStyle = g; tctx.fill();
+            tctx.beginPath();
+            tctx.arc(p.x, p.y, p.size*0.6, 0, Math.PI*2);
+            tctx.fillStyle = `rgba(255,255,255,${a})`;
+            tctx.fill();
+        } else {
+            tctx.beginPath();
+            tctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+            tctx.fillStyle = `hsla(${290+Math.random()*80},100%,80%,${a*0.8})`;
+            tctx.fill();
+        }
+        p.x += p.vx || 0;
+        p.y += (p.vy || 0) + 0.25;
+        p.age++;
+    });
+}
+
+function spawnTrail(x, y) {
+    const prev = trailPoints[trailPoints.length - 1];
+    const vx   = prev ? (x - prev.x) * 0.25 : 0;
+    const vy   = prev ? (y - prev.y) * 0.25 : 0;
+    trailPoints.push({ x, y, age:0, life:110, size:Math.random()*3+2.5, vx, vy, type:'main' });
+    for (let i = 0; i < 8; i++) {
+        trailPoints.push({
+            x: x + (Math.random()-0.5)*22,
+            y: y + (Math.random()-0.5)*22,
+            vx: (Math.random()-0.5)*3,
+            vy: (Math.random()-0.5)*3,
+            age:0, life:55+~~(Math.random()*50),
+            size:Math.random()*1.5+0.4, type:'spark'
+        });
+    }
+    if (trailPoints.length > 900) trailPoints.splice(0, trailPoints.length - 900);
+}
+
+// ─── BLACKHOLE DRAW ──────────────────────────────
+function drawBlackhole() {
+    tctx.fillStyle = 'rgba(5,5,5,0.25)';
+    tctx.fillRect(0, 0, width, height);
+
+    const bx = cursorX, by = cursorY;
+    const t  = Date.now() / 1000;
+
+    // Dark vortex center
+    const vg = tctx.createRadialGradient(bx, by, 0, bx, by, Math.min(width, height)*0.42);
+    vg.addColorStop(0,   'rgba(0,0,0,0.88)');
+    vg.addColorStop(0.35,'rgba(3,1,10,0.55)');
+    vg.addColorStop(1,   'rgba(3,1,10,0)');
+    tctx.beginPath();
+    tctx.arc(bx, by, Math.min(width, height)*0.42, 0, Math.PI*2);
+    tctx.fillStyle = vg; tctx.fill();
+
+    // Multi-ring swirl
+    [55, 95, 138, 185].forEach((baseR, ri) => {
+        const nPts = 18 + ri*8;
+        for (let i = 0; i < nPts; i++) {
+            const angle = t*(2.6 - ri*0.4) + i*(Math.PI*2/nPts);
+            const r  = baseR + Math.sin(t*2 + i*0.3)*13;
+            const px = bx + Math.cos(angle)*r;
+            const py = by + Math.sin(angle)*r*0.45;
+            const a  = (0.82 - ri*0.13) + Math.sin(t*5+i)*0.18;
+            const sz = 3.5 - ri*0.5;
+            const pg = tctx.createRadialGradient(px, py, 0, px, py, sz*2.2);
+            pg.addColorStop(0, `rgba(255,180,255,${a})`);
+            pg.addColorStop(0.5,`rgba(255,70,180,${a*0.7})`);
+            pg.addColorStop(1, `rgba(100,0,200,0)`);
+            tctx.beginPath();
+            tctx.arc(px, py, sz, 0, Math.PI*2);
+            tctx.fillStyle = pg; tctx.fill();
+        }
+    });
+
+    // Inward streaks
+    for (let i = 0; i < 18; i++) {
+        const ang = t*1.8 + i*(Math.PI*2/18);
+        tctx.beginPath();
+        tctx.moveTo(bx + Math.cos(ang)*210, by + Math.sin(ang)*210*0.45);
+        tctx.lineTo(bx + Math.cos(ang)*38,  by + Math.sin(ang)*38*0.45);
+        tctx.strokeStyle = `rgba(200,80,255,${0.07 + Math.sin(t*3+i)*0.04})`;
+        tctx.lineWidth = 1.5; tctx.stroke();
+    }
+
+    // Singularity glow
+    const sg = tctx.createRadialGradient(bx, by, 0, bx, by, 34);
+    sg.addColorStop(0,   'rgba(255,255,255,0.95)');
+    sg.addColorStop(0.3, 'rgba(255,110,199,0.65)');
+    sg.addColorStop(1,   'rgba(0,0,0,0)');
+    tctx.beginPath();
+    tctx.arc(bx, by, 34, 0, Math.PI*2);
+    tctx.fillStyle = sg; tctx.fill();
+}
+
+// ─── FREEPLAY DRAW LOOP ──────────────────────────
+function freeplayLoop() {
+    if (!isFreePlay) return;
+    if (currentEffect === 'trail')     drawTrail();
+    if (currentEffect === 'blackhole') drawBlackhole();
+    if (currentEffect === 'name')      drawNameParticles();
+    requestAnimationFrame(freeplayLoop);
+}
+
+// ─── STATE MANAGEMENT ────────────────────────────
+const STATE = {
+    currentQuestionIndex: 0,
+    answers: [],
+    questions: [
+        {
+            text: "Di mana kamu paling sering menemukan ketenangan?",
+            options: [
+                "Di kamar sendiri, rebahan tanpa suara",
+                "Di luar rumah, udara bebas dan langit luas",
+                "Di tengah keramaian, tapi pikiran terbang jauh",
+                "Di mana pun, asal ada musik yang pas"
+            ]
+        },
+        {
+            text: "Apa harapan terbesar kamu di ulang tahun ini?",
+            options: [
+                "Lebih tenang, lebih ikhlas, lebih sabar",
+                "Ngejar satu hal yang udah lama tertunda",
+                "Dikelilingi orang-orang yang beneran peduli",
+                "Jalan-jalan ke tempat yang udah lama pengen didatangi"
+            ]
+        },
+        {
+            text: "Kalau bisa tinggal di mana saja di dunia ini, kamu mau di mana?",
+            options: [
+                "Kota yang sepi tapi estetik, ada kafe di tiap sudut",
+                "Desa yang damai, dekat alam dan hamparan hijau",
+                "Pantai, dekat ombak dan sunset tiap hari",
+                "Di bulan. Atau luar angkasa sekalian 🚀"
+            ]
+        },
+        {
+            text: "Hal kecil apa yang paling sering bikin kamu bahagia?",
+            options: [
+                "Mainan sama kucing",
+                "Chat dari seseorang yang lagi kamu pikirin",
+                "Langit yang warnanya keterlaluan bagus",
+                "Playlist yang rasanya dibuat khusus buat mood kamu"
+            ]
+        }
+    ]
+};
+
+const cursor          = document.getElementById('custom-cursor');
+const permissionPopup = document.getElementById('permission-popup');
+const allowBtn        = document.getElementById('allow-camera-btn');
+const videoElement    = document.getElementById('webcam');
+const questionContainer = document.getElementById('question-container');
+const questionText    = document.getElementById('question-text');
+const optionsContainer  = document.getElementById('options-container');
+
+// ─── PERMISSION → OPENING SCENE ──────────────────
+allowBtn.addEventListener('click', () => {
+    permissionPopup.style.display = 'none';
+    startCamera();
+    showOpeningScene();
+});
+
+function showOpeningScene() {
+    const openingScene = document.getElementById('opening-scene');
+    if (!openingScene) { showNextQuestion(); return; }
+    openingScene.classList.remove('hidden');
+
+    function proceed() {
+        openingScene.style.opacity    = '0';
+        openingScene.style.transition = 'opacity 1.2s ease';
+        setTimeout(() => {
+            openingScene.classList.add('hidden');
+            openingScene.style.opacity    = '';
+            openingScene.style.transition = '';
+            showNextQuestion();
+        }, 1200);
+    }
+
+    const startBtn = document.getElementById('opening-start-btn');
+    if (startBtn) startBtn.addEventListener('click', proceed);
+    setTimeout(() => {
+        if (!openingScene.classList.contains('hidden')) proceed();
+    }, 8000);
+}
+
+// ─── QUESTION FLOW ───────────────────────────────
+function showNextQuestion() {
+    if (STATE.currentQuestionIndex >= STATE.questions.length) {
+        finishQuestions();
+        return;
+    }
+    const question = STATE.questions[STATE.currentQuestionIndex];
+    questionContainer.classList.remove('hidden');
+    questionContainer.style.opacity = '0';
+
+    setTimeout(() => {
+        questionText.textContent  = question.text;
+        optionsContainer.innerHTML = '';
+        question.options.forEach((option, index) => {
+            const btn = document.createElement('button');
+            btn.className    = 'option-btn';
+            btn.textContent  = option;
+            btn.dataset.index = index;
+            btn.addEventListener('click', () => selectOption(index));
+            optionsContainer.appendChild(btn);
+        });
+        questionContainer.style.opacity = '1';
+    }, 500);
+}
+
+function selectOption(index) {
+    const btns = document.querySelectorAll('.option-btn');
+    btns[index].classList.add('selected');
+    STATE.answers.push(STATE.questions[STATE.currentQuestionIndex].options[index]);
+
+    setTimeout(() => {
+        questionContainer.style.opacity = '0';
+        setTimeout(() => {
+            STATE.currentQuestionIndex++;
+            showNextQuestion();
+        }, 800);
+    }, 600);
+}
+
+// ─── FEEDBACK MAPPING ────────────────────────────
+const FEEDBACK_MAPPING = {
+    "Di kamar sendiri, rebahan tanpa suara":
+        "ternyata kamu tipe yang butuh 'me time' maksimal ya di kamar ✨",
+    "Di luar rumah, udara bebas dan langit luas":
+        "jiwa petualang kamu emang nggak bisa bohong, sukanya hirup udara bebas 🪐",
+    "Di tengah keramaian, tapi pikiran terbang jauh":
+        "pinter banget ya kamu, tetep tenang di tengah rame padahal pikirannya udah kemana-mana 😂",
+    "Di mana pun, asal ada musik yang pas":
+        "emang bener, playlist yang pas itu obat paling ampuh buat segalanya 🎵",
+    "Lebih tenang, lebih ikhlas, lebih sabar":
+        "semoga tahun ini hati kamu beneran seadem yang kamu mau ya 😭",
+    "Ngejar satu hal yang udah lama tertunda":
+        "aku doain hal yang kamu tunda itu bisa segera kejadian tahun ini ✨",
+    "Dikelilingi orang-orang yang beneran peduli":
+        "semoga kamu selalu nemu orang-orang yang sayang sama kamu tulus apa adanya ✨",
+    "Jalan-jalan ke tempat yang udah lama pengen didatangi":
+        "pokoknya semua list destinasi kamu harus kecentang satu-satu ya! 🚀",
+    "Kota yang sepi tapi estetik, ada kafe di tiap sudut":
+        "kalau nanti beneran tinggal di kota estetik itu, jangan lupa ajak aku ngopi ya 😂",
+    "Desa yang damai, dekat alam dan hamparan hijau":
+        "bayangin kamu bangun tidur langsung liat ijo-ijo, pasti tenang banget hidupnya ✨",
+    "Pantai, dekat ombak dan sunset tiap hari":
+        "hidup di pinggir pantai emang impian banget, tiap sore dapet sunset gratis 🌅",
+    "Di bulan. Atau luar angkasa sekalian 🚀":
+        "kalau jadi pindah ke bulan kabarin ya, siapa tau aku jadi tetangga sebelah 🚀😂",
+    "Mainan sama kucing":
+        "pantesan hatinya lembut, ternyata pawrent sejati ya 🐱",
+    "Chat dari seseorang yang lagi kamu pikirin":
+        "semoga notif dari 'dia' selalu muncul di waktu yang paling pas ✨",
+    "Langit yang warnanya keterlaluan bagus":
+        "semoga setiap hari langitnya selalu kasih warna yang bikin kamu senyum 😭",
+    "Playlist yang rasanya dibuat khusus buat mood kamu":
+        "semoga telinga kamu selalu dimanjain sama lagu-lagu yang ngertiin kamu ✨"
+};
+
+function finishQuestions() {
+    questionContainer.style.opacity = '0';
+    setTimeout(() => {
+        const feedbackParts = STATE.answers.map(ans => FEEDBACK_MAPPING[ans] || ans);
+        const part1 = `${feedbackParts[0]} dan ${feedbackParts[1]}.`;
+        const part2 = `${feedbackParts[2]}, apalagi kalau ${feedbackParts[3]}.`;
+        questionContainer.innerHTML = `
+            <div class="hologram-card feedback-scene">
+                <div class="feedback-content">
+                    <p class="feedback-text fade-in-up" style="animation-delay:0.5s">${part1}</p>
+                    <p class="feedback-text fade-in-up" style="animation-delay:3s">${part2}</p>
+                    <p class="feedback-text fade-in-up highlight" style="animation-delay:5.5s">
+                        apapun itu, aku cuma pengen kamu bahagia terus meyy... ✨
+                    </p>
+                </div>
+                <button id="next-to-puzzle" class="fade-in" style="animation-delay:8s;margin-top:30px;">Lanjut?</button>
+            </div>`;
+        questionContainer.style.opacity = '1';
+        document.getElementById('next-to-puzzle').addEventListener('click', () => initPuzzleGame());
+    }, 1000);
+}
+
+// ─── PUZZLE GAME ─────────────────────────────────
+const puzzleContainer = document.getElementById('puzzle-container');
+const puzzleBoard     = document.getElementById('puzzle-board');
+const puzzleTutorial  = document.getElementById('puzzle-tutorial');
+const startPuzzleBtn  = document.getElementById('start-puzzle-btn');
+const captureCanvas   = document.getElementById('capture-canvas');
+let puzzlePieces = [];
+
+function initPuzzleGame() {
+    questionContainer.classList.add('hidden');
+    puzzleContainer.classList.remove('hidden');
+    puzzleTutorial.classList.remove('hidden');
+}
+
+startPuzzleBtn.addEventListener('click', () => {
+    puzzleTutorial.classList.add('hidden');
+    captureAndStartPuzzle();
+});
+
+function captureAndStartPuzzle() {
+    const pctx = captureCanvas.getContext('2d');
+    captureCanvas.width  = 600;
+    captureCanvas.height = 400;
+    pctx.translate(600, 0);
+    pctx.scale(-1, 1);
+    pctx.drawImage(videoElement, 0, 0, 600, 400);
+    const imageData = captureCanvas.toDataURL('image/jpeg');
+    createPuzzlePieces(imageData);
+    startTime    = Date.now();
+    isGameActive = true;
+}
+
+function createPuzzlePieces(imageSrc) {
+    puzzleBoard.innerHTML = '';
+    puzzlePieces = [];
+    const rows = 2, cols = 3;
+    const pw = 600/cols, ph = 400/rows;
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const piece = document.createElement('div');
+            piece.className = 'puzzle-piece';
+            piece.style.width  = `${pw}px`;
+            piece.style.height = `${ph}px`;
+            piece.style.backgroundImage    = `url(${imageSrc})`;
+            piece.style.backgroundPosition = `-${c*pw}px -${r*ph}px`;
+            const pObj = {
+                element:  piece,
+                targetX:  c * pw,
+                targetY:  r * ph,
+                currentX: Math.random() * (window.innerWidth  - pw),
+                currentY: Math.random() * (window.innerHeight - ph),
+                id: r*cols + c
+            };
+            updatePiecePosition(pObj);
+            puzzleBoard.appendChild(piece);
+            puzzlePieces.push(pObj);
+        }
+    }
+    scramblePieces();
+}
+
+function updatePiecePosition(p) {
+    p.element.style.left = `${p.currentX}px`;
+    p.element.style.top  = `${p.currentY}px`;
+}
+
+function scramblePieces() {
+    puzzlePieces.forEach(p => {
+        p.currentX = Math.random() * 400;
+        p.currentY = Math.random() * 300;
+        updatePiecePosition(p);
+    });
+}
+
+function checkSnap(piece) {
+    const dx = piece.targetX - piece.currentX;
+    const dy = piece.targetY - piece.currentY;
+    if (Math.sqrt(dx*dx + dy*dy) < 60) {
+        piece.currentX = piece.targetX;
+        piece.currentY = piece.targetY;
+        updatePiecePosition(piece);
+        piece.element.classList.add('correct');
+        piece.locked = true;
+        piece.element.style.transition  = '0.2s ease';
+        piece.element.style.boxShadow   = '0 0 20px rgba(255,182,193,0.8)';
+        setTimeout(() => { piece.element.style.boxShadow = ''; }, 250);
+    }
+}
+
+function checkWin() {
+    const allCorrect = puzzlePieces.every(p => p.element.classList.contains('correct'));
+    if (allCorrect && isGameActive) {
+        isGameActive = false;
+        finishPuzzle();
+    }
+}
+
+function finishPuzzle() {
+    const duration = (Date.now() - startTime) / 1000;
+    const message  = duration < 60 ? "wahh cepet juga kamu 😭✨" : "wkwk lumayan lama juga 😭";
+    setTimeout(() => {
+        puzzleBoard.style.opacity    = '0.5';
+        puzzleBoard.style.transition = 'opacity 2s ease';
+        const feedback = document.createElement('div');
+        feedback.className = 'hologram-card fade-in';
+        feedback.style.cssText = 'position:absolute;z-index:1000;';
+        feedback.innerHTML = `
+            <h2>Puzzle Selesai!</h2>
+            <p style="margin:20px 0">${message}</p>
+            <p style="font-size:0.8rem;opacity:0.6">Waktu: ${duration.toFixed(1)} detik</p>
+            <button id="next-to-story" class="fade-in" style="margin-top:20px">Lanjut...</button>`;
+        puzzleContainer.appendChild(feedback);
+        document.getElementById('next-to-story').addEventListener('click', startStorytelling);
+    }, 1000);
+}
+
+// ─── STORYTELLING ────────────────────────────────
+const storyContainer = document.getElementById('story-container');
+const storyScroll    = document.getElementById('story-scroll');
+const bgMusic        = document.getElementById('bg-music');
+
+const STORY_LINES = [
+    "Hay meysaa...",
+    "HBD YA.. semoga hal-hal baik selalu datang ke kamu, dan",
+    "apa yang kamu usahakan bisa tercapai ...",
+    "aminn",
+    "Ohh iyaa mey...",
+    "Aku juga minta maaf kalau selama ini pernah ada sikap atau...",
+    "kata2ku yang bikin kamu ga nyaman, sengaja maupun ga sengaja..",
+    "kado itu bukan punya maksud apapun kok, cuma bentuk ucapan aja..",
+    "dan",
+    "tenang aja, aku udah ngga ngejer kamu lagi, tapii..",
+    "insyaallah :v",
+    "Aku cuma pengen semuanya tetep baik tanpa ada rasa gaenak satu sama lain..."
+];
+
+let currentLineIndex = -1;
+let isStoryActive    = false;
+let autoNextTimer    = null;
+
+function startStorytelling() {
+    puzzleContainer.classList.add('hidden');
+    storyContainer.classList.remove('hidden');
+    isStoryActive = true;
+    bgMusic.volume = 0.5;
+    bgMusic.play().catch(() => {});
+    nextStoryLine();
+}
+
+function nextStoryLine() {
+    if (!isStoryActive) return;
+    if (autoNextTimer) clearTimeout(autoNextTimer);
+    currentLineIndex++;
+    if (currentLineIndex >= STORY_LINES.length) { finishStory(); return; }
+
+    const lineText = STORY_LINES[currentLineIndex];
+    document.querySelectorAll('.story-line').forEach(l => l.classList.add('scrolled'));
+
+    const lineEl = document.createElement('div');
+    lineEl.className   = 'story-line';
+    lineEl.textContent = lineText;
+    storyScroll.appendChild(lineEl);
+    storyScroll.style.transform = `translateY(-${currentLineIndex * 60}px)`;
+    setTimeout(() => lineEl.classList.add('active'), 100);
+
+    if (lineText.endsWith('...')) {
+        autoNextTimer = setTimeout(nextStoryLine, 4000);
+    }
+}
+
+function finishStory() {
+    isStoryActive = false;
+    setTimeout(() => {
+        storyContainer.style.opacity    = '0';
+        storyContainer.style.transition = 'opacity 3s ease';
+        setTimeout(showFinalEnding, 3000);
+    }, 4000);
+}
+
+// ─── FINAL ENDING & FREEPLAY ─────────────────────
+const finalEnding    = document.getElementById('final-ending');
+const replayBtn      = document.getElementById('replay-btn');
+const freeplayPopup  = document.getElementById('freeplay-popup');
+const startFreeplayBtn = document.getElementById('start-freeplay-btn');
+
+function showFinalEnding() {
+    storyContainer.classList.add('hidden');
+    finalEnding.classList.remove('hidden');
+    finalEnding.style.opacity = '1';
+    setTimeout(() => {
+        replayBtn.classList.remove('hidden');
+        replayBtn.classList.add('fade-in');
+        setTimeout(() => {
+            freeplayPopup.classList.remove('hidden');
+            freeplayPopup.classList.add('fade-in');
+        }, 3000);
+    }, 5000);
+}
+
+replayBtn.addEventListener('click', () => location.reload());
+
+startFreeplayBtn.addEventListener('click', () => {
+    freeplayPopup.classList.add('hidden');
+    finalEnding.classList.add('hidden');
+    isFreePlay = true;
+    freeplayLoop();   // start freeplay draw loop
+});
+
+// ─── HAND TRACKING / CAMERA ──────────────────────
+let hands, camera;
+
+function startCamera() {
+    hands = new Hands({
+        locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence:  0.7
+    });
+    hands.onResults(onResults);
+    camera = new Camera(videoElement, {
+        onFrame: async () => { await hands.send({ image: videoElement }); },
+        width: 640, height: 480
+    });
+    camera.start();
+}
+
+const lerp = (s, e, a) => (1-a)*s + a*e;
+
+function onResults(results) {
+    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+    const lm = results.multiHandLandmarks[0];
+    targetX = (1 - lm[8].x) * window.innerWidth;
+    targetY = lm[8].y * window.innerHeight;
+    detectGestures(lm);
+}
+
+// ─── GESTURE DETECTION ───────────────────────────
+// NOTE: currentEffect declared at top — no hoisting issue
+function detectGestures(lm) {
+    const thumbTip  = lm[4];
+    const indexTip  = lm[8];
+    const middleTip = lm[12];
+    const ringTip   = lm[16];
+    const pinkyTip  = lm[20];
+
+    const indexExt  = indexTip.y  < lm[6].y;
+    const middleExt = middleTip.y < lm[10].y;
+    const ringExt   = ringTip.y   < lm[14].y;
+    const pinkyExt  = pinkyTip.y  < lm[18].y;
+
+    // ── FREEPLAY GESTURES ──
+    if (isFreePlay) {
+        let newEffect = 'none';
+        if      ( indexExt &&  middleExt && !ringExt && !pinkyExt)  newEffect = 'name';      // ✌️
+        else if ( indexExt &&  middleExt &&  ringExt &&  pinkyExt)  newEffect = 'galaxy';    // 🖐️
+        else if ( indexExt && !middleExt && !ringExt && !pinkyExt)  newEffect = 'trail';     // ☝️
+        else if (!indexExt && !middleExt && !ringExt && !pinkyExt)  newEffect = 'blackhole'; // ✊
+
+        if (newEffect !== currentEffect) {
+            currentEffect = newEffect;
+            // Rebuild name particles every time ✌️ is activated
+            if (currentEffect === 'name') {
+                tctx.clearRect(0, 0, width, height);
+                buildNameParticles();
+            }
+            // Clear trail canvas when switching away
+            if (currentEffect !== 'trail' && currentEffect !== 'blackhole') {
+                tctx.clearRect(0, 0, width, height);
+            }
+        }
+
+        // Spawn trail points while ☝️ is held
+        if (currentEffect === 'trail') spawnTrail(cursorX, cursorY);
+    }
+
+    // ── PINCH ──
+    const pinchDist = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+    if (pinchDist < 0.04) {
+        if (!isPinching) {
+            isPinching = true;
+            cursor.classList.add('clicking');
+            triggerGesture('click');
+        }
+    } else {
+        if (isPinching) {
+            isPinching = false;
+            cursor.classList.remove('clicking');
+        }
+    }
+
+    // ── BACK GESTURE ──
+    const isMiddleCurled  = middleTip.y > lm[10].y;
+    const isPointingLeft  = indexTip.x  > lm[5].x + 0.1;
+    if (indexExt && isMiddleCurled && isPointingLeft) debounceGesture('back');
+
+    // ── PUZZLE DRAG ──
+    if (isPinching && draggedPiece) {
+        const mx = (targetX - cursorX) * 1.8;
+        const my = (targetY - cursorY) * 1.8;
+        draggedPiece.currentX += mx * 0.2;
+        draggedPiece.currentY += my * 0.2;
+        updatePiecePosition(draggedPiece);
+    } else if (!isPinching && draggedPiece) {
+        checkSnap(draggedPiece);
+        draggedPiece.element.classList.remove('dragging');
+        draggedPiece = null;
+        checkWin();
+    }
+}
+
+function debounceGesture(gesture) {
+    if (lastGesture === gesture) return;
+    if (gestureDebounceTimer) clearTimeout(gestureDebounceTimer);
+    gestureDebounceTimer = setTimeout(() => {
+        triggerGesture(gesture);
+        lastGesture = gesture;
+        setTimeout(() => { lastGesture = null; }, 1000);
+    }, 150);
+}
+
+function triggerGesture(type) {
+    if (type === 'click') {
+        if (isStoryActive) { nextStoryLine(); return; }
+        const hovered = document.querySelector(
+            '.option-btn.hovered, #next-to-puzzle.hovered, #start-puzzle-btn.hovered, ' +
+            '#next-to-story.hovered, #replay-btn.hovered, #start-freeplay-btn.hovered, ' +
+            '#opening-start-btn.hovered'
+        );
+        if (hovered) hovered.click();
+
+        if (isGameActive && !draggedPiece) {
+            const els    = document.elementsFromPoint(cursorX, cursorY);
+            const pieceEl = els.find(el => el.classList.contains('puzzle-piece'));
+            if (pieceEl) {
+                draggedPiece = puzzlePieces.find(p => p.element === pieceEl);
+                if (draggedPiece && draggedPiece.locked) { draggedPiece = null; return; }
+                if (draggedPiece) draggedPiece.element.classList.add('dragging');
+            }
+        }
+    }
+    if (type === 'back') {
+        cursor.style.boxShadow = '0 0 30px rgba(255,255,255,0.8)';
+        setTimeout(() => { cursor.style.boxShadow = '0 0 15px rgba(255,105,180,0.8)'; }, 500);
+    }
+}
+
+// ─── CURSOR UPDATE LOOP ──────────────────────────
+function updateCursor() {
+    cursorX = lerp(cursorX, targetX, 0.15);
+    cursorY = lerp(cursorY, targetY, 0.15);
+    cursor.style.left = `${cursorX}px`;
+    cursor.style.top  = `${cursorY}px`;
+
+    const els = document.elementsFromPoint(cursorX, cursorY);
+    const hit = els.find(el =>
+        el.classList.contains('option-btn') ||
+        el.id === 'next-to-puzzle'   ||
+        el.id === 'start-puzzle-btn' ||
+        el.id === 'next-to-story'    ||
+        el.id === 'opening-start-btn'||
+        el.classList.contains('puzzle-piece')
+    );
+    document.querySelectorAll(
+        '.option-btn, #next-to-puzzle, #start-puzzle-btn, #next-to-story, ' +
+        '#replay-btn, #start-freeplay-btn, #opening-start-btn'
+    ).forEach(btn => btn.classList.toggle('hovered', btn === hit));
+
+    requestAnimationFrame(updateCursor);
+}
+
+updateCursor();
+
+STYLE.CSS
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #050505;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
+}
+
+#nebulaCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+#custom-cursor {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    background: rgba(255, 105, 180, 0.6);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    box-shadow: 0 0 15px rgba(255, 105, 180, 0.8);
+    transform: translate(-50%, -50%);
+    transition: width 0.2s, height 0.2s, background 0.2s;
+}
+
+#custom-cursor.clicking {
+    width: 30px;
+    height: 30px;
+    background: rgba(255, 182, 193, 0.9);
+}
+
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    backdrop-filter: blur(10px);
+}
+
+.popup-content {
+    background: rgba(20, 20, 20, 0.8);
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    border: 1px solid rgba(255, 105, 180, 0.3);
+    box-shadow: 0 0 30px rgba(255, 105, 180, 0.2);
+    max-width: 400px;
+}
+
+.popup-content p {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    opacity: 0.9;
+}
+
+#allow-camera-btn {
+    background: transparent;
+    color: white;
+    border: 1px solid rgba(255, 105, 180, 0.8);
+    padding: 12px 30px;
+    font-size: 1rem;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+#allow-camera-btn:hover {
+    background: rgba(255, 105, 180, 0.2);
+    box-shadow: 0 0 15px rgba(255, 105, 180, 0.5);
+    transform: translateY(-2px);
+}
+
+/* Question Flow Styles */
+#question-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 500;
+    transition: opacity 1s ease, transform 1s ease;
+}
+
+#question-container.hidden {
+    display: none;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.hologram-card {
+    background: rgba(255, 105, 180, 0.05);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 105, 180, 0.3);
+    border-radius: 24px;
+    padding: 50px;
+    width: 90%;
+    max-width: 600px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(255, 105, 180, 0.1), 
+                inset 0 0 20px rgba(255, 105, 180, 0.05);
+    animation: hologramFlicker 5s infinite alternate;
+    position: relative;
+    overflow: hidden;
+}
+
+.hologram-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+        45deg,
+        transparent,
+        rgba(255, 255, 255, 0.05),
+        transparent
+    );
+    transform: rotate(45deg);
+    animation: shine 10s infinite linear;
+}
+
+@keyframes hologramFlicker {
+    0%, 100% { opacity: 0.95; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.005); }
+    98% { opacity: 1; }
+    99% { opacity: 0.8; }
+}
+
+@keyframes shine {
+    0% { transform: translateX(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) rotate(45deg); }
+}
+
+#question-text {
+    font-size: 1.8rem;
+    margin-bottom: 40px;
+    font-weight: 300;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+}
+
+#options-container {
+    display: grid;
+    gap: 15px;
+}
+
+.option-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 18px 25px;
+    border-radius: 15px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.05rem;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+}
+
+.option-btn:hover, .option-btn.hovered {
+    background: rgba(255, 105, 180, 0.15);
+    border-color: rgba(255, 105, 180, 0.6);
+    color: white;
+    transform: translateX(10px);
+    box-shadow: 0 0 20px rgba(255, 105, 180, 0.3);
+}
+
+.option-btn.selected {
+    background: rgba(255, 105, 180, 0.4);
+    border-color: rgba(255, 105, 180, 1);
+    box-shadow: 0 0 30px rgba(255, 105, 180, 0.6);
+    transform: scale(1.05);
+}
+
+.fade-out {
+    opacity: 0;
+    transform: translateY(-20px);
+}
+
+.fade-in {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Feedback Scene Styles */
+.feedback-scene {
+    max-width: 700px;
+    padding: 60px;
+}
+
+.feedback-content {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.feedback-text {
+    font-size: 1.25rem;
+    line-height: 1.8;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 0 8px rgba(255, 105, 180, 0.3);
+    opacity: 0;
+}
+
+.feedback-text.highlight {
+    font-size: 1.4rem;
+    color: #ff69b4;
+    font-weight: 400;
+    margin-top: 10px;
+}
+
+#next-to-puzzle {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 10px 30px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0;
+}
+
+#next-to-puzzle:hover {
+    background: rgba(255, 105, 180, 0.2);
+    border-color: #ff69b4;
+    box-shadow: 0 0 15px rgba(255, 105, 180, 0.5);
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-up {
+    animation: fadeInUp 1.5s forwards ease-out;
+}
+
+.fade-in {
+    animation: fadeIn 1.5s forwards ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Puzzle Game Styles */
+#puzzle-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 600;
+}
+
+#puzzle-board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 4px;
+    width: 600px;
+    height: 400px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 105, 180, 0.2);
+    border-radius: 12px;
+    padding: 4px;
+    position: relative;
+}
+
+.puzzle-piece {
+    width: 100%;
+    height: 100%;
+    background-size: 600px 400px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    cursor: grab;
+    transition: box-shadow 0.3s ease, transform 0.1s ease;
+    position: absolute;
+    z-index: 10;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.puzzle-piece.dragging {
+    z-index: 100;
+    cursor: grabbing;
+    box-shadow: 0 0 25px rgba(255, 105, 180, 0.8);
+    transform: scale(1.05);
+    border-color: rgba(255, 105, 180, 0.8);
+}
+
+.puzzle-piece.correct {
+    border-color: rgba(0, 255, 150, 0.5);
+    box-shadow: 0 0 10px rgba(0, 255, 150, 0.2);
+}
+
+#puzzle-tutorial {
+    position: absolute;
+    z-index: 700;
+    max-width: 350px;
+}
+
+.tutorial-gestures {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 20px 0;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+#start-puzzle-btn {
+    background: #ff69b4;
+    border: none;
+    color: white;
+    padding: 10px 30px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 0 15px rgba(255, 105, 180, 0.4);
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Storytelling Scene Styles */
+#story-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 800;
+    background: radial-gradient(circle at center, rgba(10, 10, 15, 0.5) 0%, #050505 100%);
+}
+
+#story-scroll {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: transform 1.5s cubic-bezier(0.2, 0, 0.2, 1);
+    width: 80%;
+    max-width: 800px;
+}
+
+.story-line {
+    font-size: 1.5rem;
+    color: rgba(255, 255, 255, 0.85);
+    text-align: center;
+    margin: 20px 0;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 2s ease, transform 2s ease;
+    text-shadow: 0 0 10px rgba(255, 105, 180, 0.3);
+    font-weight: 300;
+    letter-spacing: 0.5px;
+}
+
+.story-line.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.story-line.scrolled {
+    opacity: 0.4;
+    transform: scale(0.9) translateY(-10px);
+}
+
+#story-hint {
+    position: fixed;
+    bottom: 40px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+
+/* Final Ending Styles */
+#final-ending {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 900;
+    background: transparent;
+    transition: opacity 3s ease;
+}
+
+.ending-content {
+    text-align: center;
+    color: white;
+}
+
+.hbd-text {
+    font-size: 3rem;
+    margin-bottom: 10px;
+    text-shadow: 0 0 20px rgba(255, 105, 180, 0.8);
+    animation: glowText 3s infinite alternate;
+}
+
+.name-text {
+    font-size: 1.5rem;
+    font-weight: 300;
+    margin-bottom: 30px;
+    opacity: 0.9;
+}
+
+.final-wish {
+    font-size: 1rem;
+    line-height: 1.8;
+    opacity: 0.7;
+    margin-bottom: 40px;
+}
+
+#replay-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 10px 30px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#replay-btn:hover {
+    background: rgba(255, 105, 180, 0.2);
+    border-color: #ff69b4;
+}
+
+#freeplay-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    text-align: center;
+    padding: 30px;
+}
+
+#start-freeplay-btn {
+    margin-top: 20px;
+    background: #ff69b4;
+    border: none;
+    color: white;
+    padding: 8px 25px;
+    border-radius: 15px;
+    cursor: pointer;
+}
+
+@keyframes glowText {
+    from { text-shadow: 0 0 10px rgba(255, 105, 180, 0.5); }
+    to { text-shadow: 0 0 30px rgba(255, 105, 180, 1); }
+}
+/* ── OPENING SCENE ── */
+#opening-scene {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 400;
+    background: transparent;
+}
+
+#opening-scene.hidden {
+    display: none;
+}
+
+.opening-content {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.opening-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.45em;
+    color: rgba(255, 182, 193, 0.6);
+    text-transform: uppercase;
+    margin: 0;
+    opacity: 0;
+    animation: openingFadeUp 1s ease 0.3s forwards;
+}
+
+.opening-name {
+    font-size: clamp(3.5rem, 14vw, 8rem);
+    font-weight: 700;
+    margin: 0;
+    background: linear-gradient(135deg, #ff69b4 0%, #da70d6 50%, #ffb6c1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 30px rgba(255, 105, 180, 0.7));
+    opacity: 0;
+    animation: openingFadeUp 1s ease 0.8s forwards, nameGlow 3s ease 2s infinite alternate;
+}
+
+@keyframes nameGlow {
+    from { filter: drop-shadow(0 0 20px rgba(255,105,180,0.5)); }
+    to   { filter: drop-shadow(0 0 50px rgba(218,112,214,0.9)); }
+}
+
+.opening-fullname {
+    font-size: clamp(0.75rem, 2.5vw, 1rem);
+    font-weight: 300;
+    letter-spacing: 0.2em;
+    color: rgba(255, 255, 255, 0.45);
+    margin: 0;
+    opacity: 0;
+    animation: openingFadeUp 1s ease 1.5s forwards;
+}
+
+.opening-barakallah {
+    font-size: clamp(1rem, 3vw, 1.5rem);
+    font-style: italic;
+    letter-spacing: 0.08em;
+    margin: 8px 0 0;
+    background: linear-gradient(90deg, #ffd700, #ff69b4, #ffd700);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.4));
+    opacity: 0;
+    animation: openingFadeUp 1s ease 2.2s forwards, baraFloat 5s ease 3.2s infinite;
+}
+
+@keyframes baraFloat {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-6px); }
+}
+
+#opening-start-btn {
+    margin-top: 36px;
+    background: transparent;
+    color: rgba(255, 182, 193, 0.8);
+    border: 1px solid rgba(255, 105, 180, 0.5);
+    padding: 12px 36px;
+    border-radius: 30px;
+    font-size: 0.9rem;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0;
+    animation: openingFadeUp 1s ease 3.5s forwards;
+    position: relative;
+    overflow: hidden;
+}
+
+#opening-start-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,105,180,0.12), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+}
+
+#opening-start-btn:hover::before,
+#opening-start-btn.hovered::before {
+    transform: translateX(100%);
+}
+
+#opening-start-btn:hover,
+#opening-start-btn.hovered {
+    background: rgba(255, 105, 180, 0.12);
+    border-color: rgba(255, 105, 180, 0.9);
+    box-shadow: 0 0 20px rgba(255, 105, 180, 0.4);
+    color: white;
+}
+
+@keyframes openingFadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
