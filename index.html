@@ -1,91 +1,109 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nebula Birthday</title>
+    <title>Happy Birthday, Meysaa ✨</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="style.css">
-    <!-- MediaPipe Hands CDN -->
+    <!-- MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 </head>
 <body>
-    <canvas id="nebulaCanvas"></canvas>
-    
-    <div id="custom-cursor"></div>
 
+    <!-- CANVAS -->
+    <canvas id="nebulaCanvas"></canvas>
+
+    <!-- CURSORS -->
+    <div id="custom-cursor"></div>
+    <div id="cursor-ring"></div>
+
+    <!-- PROGRESS BAR -->
+    <div id="progress-bar" style="width:0%"></div>
+
+    <!-- SCENE INDICATOR -->
+    <div id="scene-indicator">
+        <div class="scene-dot" data-scene="0"></div>
+        <div class="scene-dot" data-scene="1"></div>
+        <div class="scene-dot" data-scene="2"></div>
+        <div class="scene-dot" data-scene="3"></div>
+        <div class="scene-dot" data-scene="4"></div>
+    </div>
+
+    <!-- VOLUME BUTTON -->
+    <button id="volume-btn" title="Toggle music">♫</button>
+
+    <!-- PARTICLE BADGE -->
+    <div id="particle-badge"></div>
+
+    <!-- ─── PERMISSION POPUP ─── -->
     <div id="permission-popup" class="popup-overlay">
         <div class="popup-content">
-            <p>Sebelum mulai...<br>website ini butuh akses kamera buat hand tracking meyy.</p>
-            <p>tenang aja,<br>ga ada yang aku rekam atau apalagi ku simpen..</p>
+            <p>Sebelum mulai...</p>
+            <p>website ini butuh akses kamera buat hand tracking meyy. Tenang aja, ga ada yang ku rekam, apalagi ku simpen 😊.</p>
             <button id="allow-camera-btn">Izinkan Kamera</button>
         </div>
     </div>
 
-    <!-- OPENING SCENE — muncul setelah permission, sebelum questions -->
+    <!-- ─── OPENING SCENE ─── -->
     <div id="opening-scene" class="hidden">
         <div class="opening-tip">
-            <div class="tip-title">Tips 💡</div>
+            <div class="tip-title">Tips Kontrol ✦</div>
             <div class="tip-content">
-                🤏 Gerakkan tangan untuk menggerakkan kursor<br>
-                👌 untuk klik
+                    🤏 &nbsp;Gerakkan tangan → gerak kursor &nbsp;|&nbsp; 👌 &nbsp;Pinch → klik<br>
+                    &nbsp;Posisikan tangan ±30–50 cm dari kamera 
             </div>
         </div>
         <div class="opening-content">
-            <p class="opening-label">A MESSAGE FROM THE UNIVERSE</p>
+            <p class="opening-label">A Message From The Universe</p>
             <h1 class="opening-name">MEYSAA</h1>
             <p class="opening-fullname">Meisya Qeena Sheehan Rusmiyanto</p>
-            <p class="opening-arabic">بَارَكَ اللهُ فِي عُمْرِكِ</p>   
+            <p class="opening-arabic">بَارَكَ اللهُ فِي عُمْرِكِ</p>
             <p class="opening-barakallah">Barakallah Fi Umrik</p>
-            <button id="opening-start-btn">Mulai →</button>
+            <button id="opening-start-btn">Mulai &nbsp;→</button>
         </div>
     </div>
 
+    <!-- ─── FREEPLAY TIPS ─── -->
     <div id="freeplay-tips" class="hidden">
-        <p>Coba deh tangan kamu gini ✊ ☝️ 🤙 ✌️ 🖐️</p>
+        <p>✊ blackhole &nbsp;·&nbsp; ☝️ trail &nbsp;·&nbsp; ✌️ nama &nbsp;·&nbsp; 🖐️ galaxy &nbsp;·&nbsp; 🤙 foto</p>
     </div>
 
+    <!-- ─── QUESTION FLOW ─── -->
     <div id="question-container" class="hidden">
         <div id="question-card" class="hologram-card">
+            <span id="question-number"></span>
             <h2 id="question-text"></h2>
             <div id="options-container"></div>
         </div>
     </div>
 
+    <!-- ─── PUZZLE ─── -->
     <div id="puzzle-container" class="hidden">
         <div id="puzzle-board">
-            <video 
-                id="webcam"
-                class="camera-preview"
-                autoplay
-                playsinline
-            </video>
+            <video id="webcam" class="camera-preview" autoplay playsinline></video>
         </div>
-        <div id="puzzle-tutorial" class="hologram-card hidden">
-                    <p class="tutorial-text-1">Posisiin muka dulu yaa ✨</p>
-
-                    <p class="tutorial-text-2">
-                        Tenang, gampang kok mainnya
-                    </p>
-                <div class="gesture-left">
-                    🤏 = move cursor
-                </div>
-
-                <div class="gesture-right">
-                    👌 = drag piece
-                </div>
-            <button id="start-puzzle-btn">Cekrekk!</button>
+        <div id="puzzle-tutorial" class="hidden">
+            <p class="tutorial-text-1">Posisiin muka dulu yaa ✨</p>
+            <p class="tutorial-text-2">Tenang, gampang kok mainnya</p>
+            <div class="gesture-left">🤏 = gerak kursor</div>
+            <div class="gesture-right">👌 = drag pieces</div>
+            <button id="start-puzzle-btn">Cekrek! 📸</button>
         </div>
     </div>
 
     <canvas id="capture-canvas" style="display:none;"></canvas>
 
+    <!-- ─── STORY ─── -->
     <div id="story-container" class="hidden">
         <div id="story-scroll"></div>
-        <div id="story-hint" class="fade-in">👌dimana saja untuk lanjut</div>
+        <div id="story-hint">👌 &nbsp;dimana saja untuk lanjut</div>
     </div>
 
+    <!-- ─── FINAL ENDING ─── -->
     <div id="final-ending" class="hidden">
         <div class="ending-content">
             <h1 class="hbd-text">ONCE AGAIN, HBD YAA!!</h1>
@@ -95,30 +113,26 @@
                 semoga semua yang kamu usahakan terwujud,<br>
                 TERIMAKASII..✨
             </p>
-            <!-- <button id="replay-btn" class="hidden">Replay</button> -->
+            <p style="font-size:0.75rem; letter-spacing:0.2em; color:rgba(255,182,193,0.4); margin-top:20px; animation: riseUp 1s ease 3s both;">
+                Tunggu bentar mey..
+            </p>
         </div>
     </div>
 
+    <!-- ─── FREEPLAY POPUP ─── -->
     <div id="freeplay-popup" class="hologram-card hidden">
-        <p>Masih gabut? 😭✨<br>nih yuk mainan nebula bentar...</p>
-        <button id="start-freeplay-btn" class="option-btn">Ayo!</button>
+        <p>Masih gabut? 😭✨<br>Nih yuk mainan nebula bentar...</p>
+        <button id="start-freeplay-btn">Ayo!</button>
     </div>
 
+    <!-- ─── AUDIO ─── -->
     <audio id="bg-music" loop>
         <source src="assets/audiopiano.mp3" type="audio/mpeg">
     </audio>
 
+    <!-- Invisible tips overlay (compat) -->
+    <div id="tips-overlay" class="hidden"></div>
+
     <script src="script.js"></script>
-
-    <div id="tips-overlay" class="hidden">
-        <div class="tips-box">
-            <p>🤏 gerakkan tangan untuk menggerakkan kursor</p>
-            <p>👌 gunakan untuk drag</p>
-
-            <button id="tips-ok-btn">Paham</button>
-        </div>
-    </div>
-
 </body>
-
 </html>
